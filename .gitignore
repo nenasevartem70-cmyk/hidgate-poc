@@ -1,0 +1,6 @@
+Payload/
+*.o
+*.dSYM/
+*.ipa
+hidgate4
+.DS_Store
