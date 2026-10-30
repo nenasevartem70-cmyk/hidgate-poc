@@ -25,5 +25,9 @@ xcrun --sdk iphoneos clang \
 cp "$ROOT/PoC/Info.plist" "$OUT/Info.plist"
 chmod +x "$OUT/hidgate4"
 
+IPA="$ROOT/build/hidgate4-unsigned.ipa"
+python3 "$ROOT/scripts/package_ipa.py" "$OUT" "$IPA"
+
 echo "Built: $OUT"
+echo "IPA:   $IPA"
 echo "Sign and install with your normal sideloading workflow."

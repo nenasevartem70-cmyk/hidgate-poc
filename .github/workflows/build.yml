@@ -1,0 +1,46 @@
+name: build-ipa
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build unsigned IPA
+        run: |
+          set -euo pipefail
+          SDK="$(xcrun --sdk iphoneos --show-sdk-path)"
+          APP="build/Payload/hidgate4.app"
+          rm -rf build
+          mkdir -p "$APP"
+
+          xcrun --sdk iphoneos clang \
+            -arch arm64 \
+            -isysroot "$SDK" \
+            -fobjc-arc -fblocks -O2 \
+            -c PoC/main.m \
+            -o build/main.o
+
+          xcrun --sdk iphoneos clang \
+            -arch arm64 \
+            -isysroot "$SDK" \
+            -o "$APP/hidgate4" \
+            build/main.o \
+            -framework UIKit -framework Foundation -framework IOKit
+
+          cp PoC/Info.plist "$APP/Info.plist"
+          chmod +x "$APP/hidgate4"
+          python3 scripts/package_ipa.py "$APP" build/hidgate4-unsigned.ipa
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: hidgate4-unsigned-ipa
+          path: build/hidgate4-unsigned.ipa

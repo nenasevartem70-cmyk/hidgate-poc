@@ -1,4 +1,5 @@
 Payload/
+build/
 *.o
 *.dSYM/
 *.ipa

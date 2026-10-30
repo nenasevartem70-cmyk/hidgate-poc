@@ -81,6 +81,26 @@ analysis.
 
 ## Build
 
+No prebuilt `.ipa` is committed. Build it yourself from source and sign it
+with your own certificate or sideloading tool.
+
+### One command (macOS)
+
+```bash
+make
+# or: ./build.sh
+```
+
+This produces:
+
+```
+build/Payload/hidgate4.app
+build/hidgate4-unsigned.ipa
+```
+
+The IPA is unsigned. Sign it with your normal workflow (Xcode, `codesign`,
+`ldid`, AltStore, TrollStore, etc.) before installing.
+
 ### Xcode
 
 1. Create a new iOS App project (Objective-C, UIKit).
@@ -89,7 +109,7 @@ analysis.
 4. Set a bundle identifier and sign with your development team.
 5. Install on a test device you own and launch.
 
-### Command line (macOS)
+### Manual command line (macOS)
 
 ```bash
 SDK=$(xcrun --sdk iphoneos --show-sdk-path)
@@ -97,10 +117,14 @@ xcrun -sdk iphoneos clang -arch arm64 -isysroot "$SDK" -fobjc-arc -fblocks \
   -O2 -c PoC/main.m -o main.o
 xcrun -sdk iphoneos clang -arch arm64 -isysroot "$SDK" \
   -o hidgate4 main.o -framework UIKit -framework Foundation -framework IOKit
+python3 scripts/package_ipa.py hidgate4.app hidgate4-unsigned.ipa
 ```
 
-Package the binary into a `.app` with an `Info.plist`, sign it, and sideload
-it with your normal tooling.
+### GitHub Actions
+
+The workflow in `.github/workflows/build.yml` builds an unsigned IPA on a
+macOS runner and uploads it as the `hidgate4-unsigned-ipa` artifact. You can
+run it manually from the Actions tab.
 
 ## Warning
 
