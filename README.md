@@ -168,6 +168,10 @@ After that the page is available at:
 
 **https://nenasevartem70-cmyk.github.io/hidgate-poc/**
 
+Instant preview without enabling Pages:
+
+**https://raw.githack.com/nenasevartem70-cmyk/hidgate-poc/main/docs/index.html**
+
 ## Warning
 
 - Running this PoC **will** panic the kernel and reboot the device.
