@@ -160,10 +160,36 @@ and in the same thread**, immediately after the free, instead of relying on
 background threads. This removes the scheduler race between the free and the
 next allocation.
 
+### The sync trigger is healthy
+
+The `jpegreclaim` log from the second run:
+
+```
+prime submitted=5
+prime closed
+reclaimer start threads=4
+sync round=0 kr=0 dt=0.094s
+sync round=1 kr=0 dt=0.133s
+sync round=2 kr=0 dt=0.238s
+background task id=3
+camera:// opened=0
+```
+
+Our own `sel1` sync decode completes in 0.1–0.2 s even after the 5-request
+prime. The timeout that frees the stale request is specific to the **Camera
+decode path**, not to a generic 2048×2048 sel1 decode. That is why the
+same-thread reclaim had no timeout to act on.
+
+New build adds a mass prime (8 threads × 50 iterations × 10 async requests)
+before the true sync cycles. If the churn stalls the codec, the same-thread
+sync returns `kIOReturnTimeout` and the very next allocation on that
+connection reuses the freed slot. The build also logs reclaimer progress once
+per second, so we can see whether the storm survives backgrounding.
+
 ## Next steps
 
-1. Run the same-thread `jpegreclaim` and confirm `cycle round=... sync
-   kr=0xe00002d6` (`kIOReturnTimeout`, `dt ~= 10 s`).
+1. Run `jpegstall` and confirm `cycle round=... sync kr=0xe00002d6`
+   (`kIOReturnTimeout`, `dt ~= 10 s`).
 2. Observe whether the panic disappears, changes registers, or turns into a
    double-free/write fault.
 3. If the sync trigger still returns instantly, switch to an in-app camera

