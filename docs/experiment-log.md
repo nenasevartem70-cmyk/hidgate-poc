@@ -4,6 +4,10 @@ This is the working log for the crash-to-control experiments. Everything here
 was run on the spare iPhone XR (`iPhone11,8`, iOS 18.7.2, A12). The full panic
 logs are kept private; only redacted fields are published.
 
+- Current control ladder: [`kernel-control.md`](kernel-control.md)
+- Reproducible test matrix: [`final-tests.md`](final-tests.md)
+- AppleJPEG path: [`applejpeg-cve-2026-20687.md`](applejpeg-cve-2026-20687.md)
+
 ## Summary
 
 | Build | Idea | Result |

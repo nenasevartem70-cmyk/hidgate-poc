@@ -1,30 +1,56 @@
 <p align="center">
-  <img src="assets/banner.svg" alt="CVE-2026-28992 — IOHIDFamily FastPathUserClient crash PoC" width="100%">
+  <img src="assets/banner.svg" alt="iOS 18.7.2 / A12 kernel control research" width="100%">
 </p>
 
 <p align="center">
-  <img alt="CVE" src="https://img.shields.io/badge/CVE-2026--28992-critical?style=for-the-badge&labelColor=1a0d10&color=ff4d4d">
+  <img alt="CVE-2026-28992" src="https://img.shields.io/badge/CVE-2026--28992-critical?style=for-the-badge&labelColor=1a0d10&color=ff4d4d">
+  <img alt="CVE-2026-20687" src="https://img.shields.io/badge/CVE-2026--20687-critical?style=for-the-badge&labelColor=1a0d10&color=ff4d4d">
   <img alt="Platform" src="https://img.shields.io/badge/iOS-18.7.2%20%2F%20A12-0b1219?style=for-the-badge&labelColor=101a24&color=58a6ff">
-  <img alt="Status" src="https://img.shields.io/badge/status-crash%20PoC-ff9f43?style=for-the-badge&labelColor=1a140b">
+  <img alt="Status" src="https://img.shields.io/badge/status-UAF%20%2F%20controlled%20reclaim-ff9f43?style=for-the-badge&labelColor=1a140b">
   <img alt="License" src="https://img.shields.io/badge/license-MIT-27c93f?style=for-the-badge&labelColor=0b1219">
   <a href="https://github.com/nenasevartem70-cmyk/hidgate-poc/actions/workflows/build.yml"><img alt="Build" src="https://github.com/nenasevartem70-cmyk/hidgate-poc/actions/workflows/build.yml/badge.svg"></a>
 </p>
 
-# CVE-2026-28992 — IOHIDFamily FastPathUserClient crash PoC
+# iOS 18.7.2 / A12 — kernel control research
 
-Standalone iOS proof-of-concept for the `IOHIDEventServiceFastPathUserClient`
-race/UAF in IOHIDFamily. The PoC drives the fast-path open/teardown race and
-reliably produces a **kernel data abort** on iOS 18.7.2 (A12 / iPhone XR).
+Two kernel bugs on the spare iPhone XR, researched from Windows/WSL with no
+Mac in the loop:
 
-> **This is a crash PoC, not a jailbreak.**
-> It does not provide kernel read/write, does not bypass PAC/PPL/SPTM, and does
-> not install anything. It intentionally panics the kernel and reboots the
-> device.
+- **CVE-2026-28992** — IOHIDFamily fast-path open/teardown race. Stable
+  kernel panic, but **crash-only** on the reachable SPU provider.
+- **CVE-2026-20687** — AppleJPEGDriver decoder timeout UAF. Reproducible
+  deferred panic, controlled 10 s free, and same-type reclaim without a
+  panic.
+
+> **This is not a jailbreak. No kernel read/write yet.**
+> The repository documents the crash → UAF → controlled free/reclaim ladder.
+> It does not bypass PAC/PPL/SPTM, does not install anything, and does not
+> provide arbitrary kernel memory access.
 
 > **«Паника — это не конец. Это доказательство, что мы уже в ядре.»**
 > **Crash → Control → Jailbreak.**
 
-## Status
+## Kernel control status
+
+| Level | State |
+|---|---|
+| 0. Crash | **PASS** — IOHID and AppleJPEG signatures reproduced |
+| 1. Reproducible UAF | **PASS** — AppleJPEG `JpegRequest` read after free |
+| 2. Controlled free | **PASS** — `sel1` sync returns `kIOReturnTimeout` after 10.001 s |
+| 3. Same-type reclaim | **PASS** — 10 async allocations after the timeout, kernel survives |
+| 4. Persistent stale node | **PARTIAL** — immediate close produces a `setPowerState` wedge |
+| 5. Write / read primitive | **NOT YET** |
+| 6. PAC / PPL bypass | **NOT YET** |
+| 7. Kernel r/w + jailbreak | **NOT YET** |
+
+The direct PC-control path from the public PoC is PAC-protected on A12
+(`autda` + `blraa`), so the next gate is a double-free/write primitive, not a
+fake vtable. Read the full reasoning in
+[`docs/kernel-control.md`](docs/kernel-control.md).
+
+## IOHID path — CVE-2026-28992
+
+### Status
 
 | Item | Value |
 |---|---|
@@ -35,14 +61,14 @@ reliably produces a **kernel data abort** on iOS 18.7.2 (A12 / iPhone XR).
 | Patched in | iOS 18.7.9 / iPadOS 18.7.9 and iOS 26.5 / iPadOS 26.5 |
 | Tested on | iPhone XR (`iPhone11,8`), iOS 18.7.2 (22H124), A12 |
 | Result | Kernel data abort / panic, device reboots |
-| Control status | Crash-only on the reachable SPU provider; AppleJPEGDriver lead active |
+| Control status | Crash-only on the reachable SPU provider |
 
 The IOHID fast-path object is provider-side: `copyEvent` never delivers an
 event on this target (245,808 attempts, all `kIOReturnNoResources`), so the
 free cannot be raced from userland. The next control lead is
 [CVE-2026-20687 in AppleJPEGDriver](docs/applejpeg-cve-2026-20687.md).
 
-The original research and PoC were published by **Johnny Franks
+The original IOHID research and PoC were published by **Johnny Franks
 (@0xjohnny)**. This repository contains a standalone build of the same
 technique, with service enumeration and a panic-log analysis from the
 18.7.2/A12 target.
@@ -52,6 +78,9 @@ technique, with service enumeration and a panic-log analysis from the
 <p align="center">
   <img src="assets/roadmap.svg" alt="Crash to control to jailbreak roadmap" width="100%">
 </p>
+
+The roadmap below is the original IOHID path; the current AppleJPEG ladder is
+the table at the top of this README.
 
 ## Patch timeline
 
@@ -120,6 +149,50 @@ consistent with the FastPath open/teardown race.
 See [`docs/panic-analysis.md`](docs/panic-analysis.md) for the redacted
 analysis.
 
+## AppleJPEG path — CVE-2026-20687
+
+Apple: *"An app may be able to cause unexpected system termination or write
+kernel memory."* Fixed in iOS 18.7.7 / iPadOS 18.7.7 and iOS 26.4 / iPadOS
+26.4. The 18.7.2 kext is `AppleJPEGDriver 7.6.9`.
+
+What works on the test device:
+
+1. `IOServiceOpen("AppleJPEGDriver", type 0)` succeeds from the app sandbox.
+2. `sel1` accepts the `0x58`-byte `AppleJPEGDriverIOStruct`; both sync and
+   async decodes work.
+3. Five async decodes plus `close`, then Camera, produce a deferred kernel
+   data abort inside `AppleJPEGDriver`:
+
+```
+pc  = ... (AppleJPEGDriver)
+x5  = 0xfeedfacefeedfacf
+x6  = 0xfeedfacefeedfacf
+x12 = 0
+far = 0x308
+
+0xfffffff008df3418:  ldrb w12, [x12, #0x308]
+```
+
+4. An 8000-request mass prime drives a true sync decode into
+   `kIOReturnTimeout` (`0xe00002d6`, `dt=10.001s`).
+5. Ten async requests on the same connection immediately after the timeout
+   reclaim the freed `JpegRequest`; the kernel survives.
+6. Closing immediately after the reclaim leaves the driver wedged in
+   `setPowerState(1 -> 0)` (10.2 s watchdog). That is a DoS, not control.
+
+Full details:
+
+- [`docs/applejpeg-cve-2026-20687.md`](docs/applejpeg-cve-2026-20687.md)
+- [`docs/applejpeg-panic-2026-10-30.md`](docs/applejpeg-panic-2026-10-30.md)
+- [`docs/kernel-control.md`](docs/kernel-control.md)
+- Sources: [`experiments/applejpeg/`](experiments/applejpeg/)
+
+## Final tests
+
+The reproducible test matrix (T1–T8), exact log lines, pass/fail criteria,
+and log-collection steps are in
+[`docs/final-tests.md`](docs/final-tests.md).
+
 ## Build
 
 No prebuilt `.ipa` is committed. Build it yourself from source and sign it
@@ -169,11 +242,21 @@ run it manually from the Actions tab.
 
 ## Research log
 
-The crash-to-control experiments (`hidgate4` through `hidgate10`) are
-documented in [`docs/experiment-log.md`](docs/experiment-log.md). Variant
-sources live in [`experiments/`](experiments/). The short version: the UAF is
-stable, phase A (`close`/`open`) is the trigger, and generic/targeted heap
-spray has not yet reclaimed the object.
+The full crash-to-control log is
+[`docs/experiment-log.md`](docs/experiment-log.md). Variant sources live in
+[`experiments/`](experiments/) and
+[`experiments/applejpeg/`](experiments/applejpeg/).
+
+Short version:
+
+- IOHID `close`/`open` is the trigger; generic and targeted sprays did not
+  reclaim the provider-side object. `copyEvent` never delivers an event on
+  this SPU, so the IOHID path is crash-only.
+- AppleJPEG `sel1` sync/async works from the app sandbox. The deferred UAF is
+  reproducible via Camera, and the 10 s timeout can be forced on demand.
+- The same-type reclaim after the timeout survives; immediate close produces
+  a power-state wedge. The next goal is a double-free/write primitive, not a
+  fake vtable.
 
 ## Project page (GitHub Pages)
 
@@ -195,20 +278,61 @@ Instant preview without enabling Pages:
 
 **https://raw.githack.com/nenasevartem70-cmyk/hidgate-poc/main/docs/index.html**
 
+## Direct links
+
+### Repository docs
+
+- Kernel control ladder: [`docs/kernel-control.md`](docs/kernel-control.md)
+- Final test matrix (T1–T8): [`docs/final-tests.md`](docs/final-tests.md)
+- AppleJPEG CVE notes: [`docs/applejpeg-cve-2026-20687.md`](docs/applejpeg-cve-2026-20687.md)
+- AppleJPEG panic analysis: [`docs/applejpeg-panic-2026-10-30.md`](docs/applejpeg-panic-2026-10-30.md)
+- Full experiment log: [`docs/experiment-log.md`](docs/experiment-log.md)
+- IOHID panic analysis: [`docs/panic-analysis.md`](docs/panic-analysis.md)
+- AppleJPEG sources: [`experiments/applejpeg/`](experiments/applejpeg/)
+
+### CVE-2026-20687 (AppleJPEGDriver)
+
+- Apple security content, iOS 26.4 / iPadOS 26.4:
+  https://support.apple.com/en-us/126792
+- Apple security content, iOS 18.7.7 / iPadOS 18.7.7:
+  https://support.apple.com/en-us/126793
+- CVE record: https://www.cve.org/CVERecord?id=CVE-2026-20687
+- NVD: https://nvd.nist.gov/vuln/detail/CVE-2026-20687
+- Public PoC: https://github.com/0xjohnnydev/CVE-2026-20687-AppleJPEGDriver-UAF
+
+### CVE-2026-28992 (IOHIDFamily)
+
+- CVE record: https://www.cve.org/CVERecord?id=CVE-2026-28992
+- NVD: https://nvd.nist.gov/vuln/detail/CVE-2026-28992
+- Public PoC:
+  https://github.com/0xjohnnydev/CVE-2026-28992-IOHIDFamily-FastPathUserClient-Race-Conditions
+- Independent research:
+  https://github.com/clogan9019-dotcom/IOHIDFamily-PoC-Research
+
 ## Warning
 
-- Running this PoC **will** panic the kernel and reboot the device.
-- Do not run it on a primary phone.
+- The IOHID PoC **will** panic the kernel and reboot the device.
+- The AppleJPEG builds can panic, reboot, or wedge the JPEG driver's power
+  state (`setPowerState(1 -> 0)` timeout).
+- Do not run any of this on a primary phone.
 - Save your work first.
-- The PoC is intentionally aggressive: 16 probe connections every 80 ms for
-  120 seconds.
+- The PoCs are intentionally aggressive: the IOHID baseline keeps 16 probe
+  connections every 80 ms for 120 seconds; the AppleJPEG prime can submit
+  thousands of decodes.
 
 ## Credits
 
-- **Johnny Franks (@0xjohnny)** — discovery and original PoC:
-  - https://github.com/0xjohnnydev/CVE-2026-28992-IOHIDFamily-FastPathUserClient-Race-Conditions
-  - https://github.com/clogan9019-dotcom/IOHIDFamily-PoC-Research
-- Apple Security Advisory: iOS 18.7.9 / iPadOS 18.7.9.
+- **Johnny Franks (@0xjohnny)** — discovery and original PoCs:
+  - IOHID: https://github.com/0xjohnnydev/CVE-2026-28992-IOHIDFamily-FastPathUserClient-Race-Conditions
+  - AppleJPEG: https://github.com/0xjohnnydev/CVE-2026-20687-AppleJPEGDriver-UAF
+- **clogan9019-dotcom** — independent IOHID research:
+  https://github.com/clogan9019-dotcom/IOHIDFamily-PoC-Research
+- Apple Security Advisories:
+  - iOS 18.7.9 / iPadOS 18.7.9 (CVE-2026-28992)
+  - iOS 18.7.7 / iPadOS 18.7.7 (CVE-2026-20687):
+    https://support.apple.com/en-us/126793
+  - iOS 26.4 / iPadOS 26.4 (CVE-2026-20687):
+    https://support.apple.com/en-us/126792
 
 ## License
 

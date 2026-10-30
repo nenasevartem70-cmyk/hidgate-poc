@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#060a0f">
-  <title>CVE-2026-28992 — IOHIDFamily FastPathUserClient crash PoC</title>
+  <title>iOS 18.7.2 / A12 - kernel control research</title>
   <meta name="description" content="App-reachable IOHIDFamily FastPathUserClient race/UAF. iOS 18.7.2 / iPhone XR. Crash PoC, not a jailbreak.">
   <link rel="icon" href="assets/banner.svg" type="image/svg+xml">
   <style>
@@ -294,6 +294,7 @@
     <div class="nav-inner">
       <a class="brand" href="#top"><span>hidgate</span>-poc</a>
       <a href="#overview">Overview</a>
+      <a href="#control">Control</a>
       <a href="#roadmap">Roadmap</a>
       <a href="#race">Race</a>
       <a href="#panic">Panic</a>
@@ -307,13 +308,14 @@
 
   <main id="top">
     <div class="hero">
-      <img src="assets/hero.svg" alt="CVE-2026-28992 kernel data abort hero">
+      <img src="assets/hero.svg" alt="iOS 18.7.2 kernel UAF and control research hero">
     </div>
 
     <div class="badges">
-      <img alt="CVE" src="https://img.shields.io/badge/CVE-2026--28992-critical?style=for-the-badge&labelColor=1a0d10&color=ff4d4d">
+      <img alt="CVE-2026-28992" src="https://img.shields.io/badge/CVE-2026--28992-critical?style=for-the-badge&labelColor=1a0d10&color=ff4d4d">
+      <img alt="CVE-2026-20687" src="https://img.shields.io/badge/CVE-2026--20687-critical?style=for-the-badge&labelColor=1a0d10&color=ff4d4d">
       <img alt="Platform" src="https://img.shields.io/badge/iOS-18.7.2%20%2F%20A12-0b1219?style=for-the-badge&labelColor=101a24&color=58a6ff">
-      <img alt="Status" src="https://img.shields.io/badge/status-crash%20PoC-ff9f43?style=for-the-badge&labelColor=1a140b">
+      <img alt="Status" src="https://img.shields.io/badge/status-UAF%20%2F%20controlled%20reclaim-ff9f43?style=for-the-badge&labelColor=1a140b">
       <img alt="License" src="https://img.shields.io/badge/license-MIT-27c93f?style=for-the-badge&labelColor=0b1219">
       <a href="https://github.com/nenasevartem70-cmyk/hidgate-poc/actions/workflows/build.yml"><img alt="Build" src="https://github.com/nenasevartem70-cmyk/hidgate-poc/actions/workflows/build.yml/badge.svg"></a>
     </div>
@@ -326,28 +328,53 @@
     <section id="overview">
       <h2>Overview</h2>
       <p class="lead">
-        <strong>hidgate-poc</strong> is a standalone iOS crash PoC for
-        <strong>CVE-2026-28992</strong> in <code>IOHIDEventServiceFastPathUserClient</code>.
-        It is reachable from the normal app sandbox without entitlements and was
-        tested on an iPhone XR (A12) running iOS 18.7.2.
+        <strong>hidgate-poc</strong> documents two kernel bugs on an iPhone XR
+        (A12) running iOS 18.7.2: the IOHIDFamily fast-path race
+        (<strong>CVE-2026-28992</strong>) and the AppleJPEGDriver decoder
+        timeout UAF (<strong>CVE-2026-20687</strong>). Both are reachable from
+        the normal app sandbox without entitlements.
       </p>
 
       <div class="grid">
         <div class="card red">
-          <div class="kicker">Vulnerability</div>
-          <h3>Race / UAF</h3>
-          <p>FastPath open and teardown operate in different locking domains on the same provider state.</p>
+          <div class="kicker">IOHID</div>
+          <h3>Crash-only</h3>
+          <p>FastPath open/teardown race. The provider-side object is not reachable by userland sprays, and <code>copyEvent</code> never delivers an event on this SPU.</p>
         </div>
         <div class="card">
+          <div class="kicker">AppleJPEG</div>
+          <h3>UAF + reclaim</h3>
+          <p>Deferred <code>JpegRequest</code> UAF, a controlled 10 s timeout, and same-type reclaim without a panic.</p>
+        </div>
+        <div class="card green">
           <div class="kicker">Target</div>
           <h3>iOS 18.7.2 / A12</h3>
           <p>iPhone XR (iPhone11,8), xnu-11417.140.69.702.20~1.</p>
         </div>
-        <div class="card green">
-          <div class="kicker">Patched</div>
-          <h3>18.7.9 / 26.5</h3>
-          <p>Apple fixed the issue with improved locking. The PoC targets the vulnerable builds.</p>
-        </div>
+      </div>
+    </section>
+
+    <section id="control">
+      <h2>Kernel control status</h2>
+      <p class="lead">
+        No kernel read/write yet. The current rung is a controlled free and a
+        same-type reclaim in AppleJPEGDriver. The public PoC's direct
+        <code>*(*(request+0)+0x28)()</code> path is PAC-protected on A12
+        (<code>autda</code> + <code>blraa</code>), so the next gate is a
+        double-free/write primitive, not a fake vtable.
+      </p>
+      <div class="code"><span class="g">0. Crash</span>              <span class="o">PASS</span>
+<span class="g">1. Reproducible UAF</span>     <span class="o">PASS</span>
+<span class="g">2. Controlled free</span>      <span class="o">PASS</span>  kIOReturnTimeout, 10.001 s
+<span class="g">3. Same-type reclaim</span>    <span class="o">PASS</span>  kernel survives
+<span class="g">4. Persistent stale node</span> <span class="m">PARTIAL</span>  power-state wedge
+<span class="g">5. Write / read primitive</span> <span class="r">NOT YET</span>
+<span class="g">6. PAC / PPL bypass</span>      <span class="r">NOT YET</span>
+<span class="g">7. Kernel r/w + jailbreak</span> <span class="r">NOT YET</span></div>
+      <div class="links">
+        <a class="btn primary" href="https://github.com/nenasevartem70-cmyk/hidgate-poc/blob/main/docs/kernel-control.md">Control ladder</a>
+        <a class="btn" href="https://github.com/nenasevartem70-cmyk/hidgate-poc/blob/main/docs/final-tests.md">Final tests</a>
+        <a class="btn" href="https://github.com/nenasevartem70-cmyk/hidgate-poc/blob/main/docs/applejpeg-panic-2026-10-30.md">AppleJPEG panic</a>
       </div>
     </section>
 
@@ -384,7 +411,7 @@
         <div class="caption">Faulting instruction: <code>ldr x8, [x16, #0x38]!</code> &#183; x16 = 0x0020000000000000.</div>
       </div>
 
-      <div class="code"><span class="r">Kernel data abort</span>
+      <div class="code"><span class="r">IOHIDFamily — kernel data abort</span>
 pc  = <span class="o">0xfffffff02405c388</span>
 x16 = <span class="o">0x0020000000000000</span>
 far = <span class="o">0x0020000000000038</span>
@@ -392,10 +419,20 @@ esr = <span class="m">0x0000000096000004</span>
 
 <span class="b">0xfffffff008424388</span>:  <span class="r">ldr x8, [x16, #0x38]!</span></div>
 
+      <div class="code"><span class="r">AppleJPEGDriver — deferred UAF</span>
+pc  = <span class="o">...</span> (AppleJPEGDriver)
+x5  = <span class="o">0xfeedfacefeedfacf</span>
+x6  = <span class="o">0xfeedfacefeedfacf</span>
+x12 = <span class="o">0</span>
+far = <span class="o">0x308</span>
+
+<span class="b">0xfffffff008df3418</span>:  <span class="r">ldrb w12, [x12, #0x308]</span></div>
+
       <div class="warn">
-        <strong>This is a crash PoC, not a jailbreak.</strong>
-        It does not provide kernel read/write, PAC/PPL/SPTM bypass, or persistence.
-        It intentionally panics the kernel and reboots the device.
+        <strong>Crash is not control.</strong>
+        The repository documents a controlled free and a same-type reclaim, not
+        kernel read/write. There is no PAC/PPL/SPTM bypass, no persistence, and
+        no jailbreak. The test builds intentionally panic or wedge the kernel.
       </div>
     </section>
 
@@ -430,20 +467,22 @@ build/Payload/hidgate4.app
     <section id="credits">
       <h2>Credits</h2>
       <p class="lead">
-        Original discovery and PoC: <strong>Johnny Franks (@0xjohnny)</strong>.
-        This repository adds a standalone build, service enumeration, a redacted
-        panic analysis, and a reproducible IPA build workflow.
+        Original discovery and PoCs: <strong>Johnny Franks (@0xjohnny)</strong>
+        for both IOHIDFamily and AppleJPEGDriver. This repository adds
+        standalone builds, service enumeration, redacted panic analysis, a
+        controlled timeout/reclaim test set, and a reproducible IPA workflow.
       </p>
       <div class="links">
-        <a class="btn" href="https://github.com/0xjohnnydev/CVE-2026-28992-IOHIDFamily-FastPathUserClient-Race-Conditions">Original PoC</a>
-        <a class="btn" href="https://github.com/clogan9019-dotcom/IOHIDFamily-PoC-Research">Alternative PoC</a>
-        <a class="btn" href="https://support.apple.com/en-us/127111">Apple advisory</a>
+        <a class="btn" href="https://github.com/0xjohnnydev/CVE-2026-28992-IOHIDFamily-FastPathUserClient-Race-Conditions">IOHID PoC</a>
+        <a class="btn" href="https://github.com/0xjohnnydev/CVE-2026-20687-AppleJPEGDriver-UAF">AppleJPEG PoC</a>
+        <a class="btn" href="https://github.com/clogan9019-dotcom/IOHIDFamily-PoC-Research">Alternative IOHID PoC</a>
+        <a class="btn" href="https://support.apple.com/en-us/126793">Apple advisory</a>
       </div>
     </section>
   </main>
 
   <footer>
-    MIT licensed &#183; for security research on devices you own &#183; crash PoC, not a jailbreak<br>
+    MIT licensed &#183; for security research on devices you own &#183; kernel UAF / controlled reclaim, not a jailbreak<br>
     <span style="color:#ffb86b">Crash &#8594; Control &#8594; Jailbreak</span>
   </footer>
 </body>
