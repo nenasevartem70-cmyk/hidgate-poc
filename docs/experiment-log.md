@@ -186,10 +186,32 @@ sync returns `kIOReturnTimeout` and the very next allocation on that
 connection reuses the freed slot. The build also logs reclaimer progress once
 per second, so we can see whether the storm survives backgrounding.
 
+### 7.2 s near-timeout
+
+`jpegstall2` with a 4000-request mass prime produced:
+
+```
+mass spray done conn=400 req=4000 fail=0
+cycle round=0 sync kr=0 dt=7.210s
+cycle round=1 sync kr=0 dt=0.008s
+cycle round=2 sync kr=0 dt=0.007s
+reclaimer stop conn=4312 req=21560 fail=0
+jpegreclaim done (no panic)
+```
+
+The first sync after the mass prime waited **7.21 s** — close to the driver's
+10 s wait (`w2 = 0x2710`) but still completed. The next two syncs were fast,
+so the stall is a one-shot queue-drain effect. There was no panic this run.
+
+Next build doubles the mass prime to 8000 requests and starts the reclaimer
+storm **before** the sync cycle. The goal is to push the first sync past 10 s,
+get `kIOReturnTimeout`, and have the storm plus the same-connection allocation
+already in flight when the request is freed.
+
 ## Next steps
 
-1. Run `jpegstall` and confirm `cycle round=... sync kr=0xe00002d6`
-   (`kIOReturnTimeout`, `dt ~= 10 s`).
+1. Run `jpegstall3` (8000-request prime, storm first) and confirm
+   `cycle round=0 sync kr=0xe00002d6` (`dt ~= 10 s`).
 2. Observe whether the panic disappears, changes registers, or turns into a
    double-free/write fault.
 3. If the sync trigger still returns instantly, switch to an in-app camera
