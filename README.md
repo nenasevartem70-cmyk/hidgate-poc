@@ -1,3 +1,15 @@
+<p align="center">
+  <img src="assets/banner.svg" alt="CVE-2026-28992 — IOHIDFamily FastPathUserClient crash PoC" width="100%">
+</p>
+
+<p align="center">
+  <img alt="CVE" src="https://img.shields.io/badge/CVE-2026--28992-critical?style=for-the-badge&labelColor=1a0d10&color=ff4d4d">
+  <img alt="Platform" src="https://img.shields.io/badge/iOS-18.7.2%20%2F%20A12-0b1219?style=for-the-badge&labelColor=101a24&color=58a6ff">
+  <img alt="Status" src="https://img.shields.io/badge/status-crash%20PoC-ff9f43?style=for-the-badge&labelColor=1a140b">
+  <img alt="License" src="https://img.shields.io/badge/license-MIT-27c93f?style=for-the-badge&labelColor=0b1219">
+  <a href="https://github.com/nenasevartem70-cmyk/hidgate-poc/actions/workflows/build.yml"><img alt="Build" src="https://github.com/nenasevartem70-cmyk/hidgate-poc/actions/workflows/build.yml/badge.svg"></a>
+</p>
+
 # CVE-2026-28992 — IOHIDFamily FastPathUserClient crash PoC
 
 Standalone iOS proof-of-concept for the `IOHIDEventServiceFastPathUserClient`
@@ -45,6 +57,10 @@ The AOP variant additionally uses `mach_port_destroy` on probe connections to
 fire asynchronous `didTerminate`/teardown while opener threads walk the same
 provider state.
 
+<p align="center">
+  <img src="assets/race.svg" alt="FastPath open/teardown race diagram" width="100%">
+</p>
+
 ## What this PoC does
 
 1. Enumerates every `IOHIDEventService` in the IORegistry.
@@ -71,6 +87,10 @@ esr = 0x96000004
 
 0xfffffff008424388:  ldr x8, [x16, #0x38]!
 ```
+
+<p align="center">
+  <img src="assets/panic.svg" alt="Kernel data abort panic excerpt" width="100%">
+</p>
 
 The faulting instruction is a virtual call through a corrupted object
 pointer. The backtrace contains `IOHIDFamily` and `AppleSPU`, which is

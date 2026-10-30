@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 430" width="1000" height="430" role="img" aria-label="IOHIDFamily FastPath open teardown race diagram">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#080c12"/>
+      <stop offset="1" stop-color="#101a24"/>
+    </linearGradient>
+    <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse">
+      <path d="M 32 0 L 0 0 0 32" fill="none" stroke="#1a2633" stroke-width="1"/>
+    </pattern>
+    <marker id="arrowGray" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#6f8498"/>
+    </marker>
+    <marker id="arrowRed" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#ff5f56"/>
+    </marker>
+    <marker id="arrowOrange" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#ffb86b"/>
+    </marker>
+  </defs>
+
+  <rect width="1000" height="430" fill="url(#bg)"/>
+  <rect width="1000" height="430" fill="url(#grid)" opacity="0.28"/>
+
+  <text x="40" y="54" fill="#f5f7fa" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="24" font-weight="700">FastPath open / teardown race</text>
+  <text x="40" y="80" fill="#6f8498" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13">CVE-2026-28992 &#183; two locking domains, one provider</text>
+
+  <g font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">
+    <rect x="40" y="120" width="230" height="92" rx="10" fill="#0b1219" stroke="#2b4053"/>
+    <text x="60" y="150" fill="#f5f7fa" font-size="16" font-weight="700">App sandbox</text>
+    <text x="60" y="176" fill="#8fa6bb" font-size="12">IOServiceOpen(type=2)</text>
+    <text x="60" y="196" fill="#8fa6bb" font-size="12">caller OSDictionary</text>
+
+    <rect x="385" y="120" width="230" height="92" rx="10" fill="#0b1219" stroke="#2b4053"/>
+    <text x="405" y="150" fill="#f5f7fa" font-size="16" font-weight="700">FastPathUserClient</text>
+    <text x="405" y="176" fill="#8fa6bb" font-size="12">sel0 gate &#183; sel1 close</text>
+    <text x="405" y="196" fill="#8fa6bb" font-size="12">sel2 copyEvent</text>
+
+    <rect x="730" y="120" width="230" height="92" rx="10" fill="#0b1219" stroke="#2b4053"/>
+    <text x="750" y="150" fill="#f5f7fa" font-size="16" font-weight="700">Provider state</text>
+    <text x="750" y="176" fill="#8fa6bb" font-size="12">client dict / list</text>
+    <text x="750" y="196" fill="#8fa6bb" font-size="12">openForClient()</text>
+
+    <line x1="270" y1="166" x2="375" y2="166" stroke="#6f8498" stroke-width="2" marker-end="url(#arrowGray)"/>
+    <line x1="615" y1="166" x2="720" y2="166" stroke="#6f8498" stroke-width="2" marker-end="url(#arrowGray)"/>
+
+    <rect x="70" y="285" width="350" height="80" rx="10" fill="#1a0d10" stroke="#ff5f56" stroke-width="1.5"/>
+    <text x="92" y="314" fill="#ff5f56" font-size="14" font-weight="700">Thread A &#8212; teardown</text>
+    <text x="92" y="338" fill="#e6b7b7" font-size="12">sel1 close / mach_port_destroy</text>
+    <text x="92" y="356" fill="#e6b7b7" font-size="12">free provider-facing state</text>
+
+    <rect x="580" y="285" width="350" height="80" rx="10" fill="#1a140b" stroke="#ffb86b" stroke-width="1.5"/>
+    <text x="602" y="314" fill="#ffb86b" font-size="14" font-weight="700">Thread B &#8212; open path</text>
+    <text x="602" y="338" fill="#f0d3ae" font-size="12">sel0 gate / copyEvent</text>
+    <text x="602" y="356" fill="#f0d3ae" font-size="12">walk the same provider state</text>
+
+    <path d="M 245 285 C 245 235 720 235 790 220" fill="none" stroke="#ff5f56" stroke-width="2" stroke-dasharray="6 5" marker-end="url(#arrowRed)"/>
+    <path d="M 755 285 C 755 235 830 235 845 220" fill="none" stroke="#ffb86b" stroke-width="2" stroke-dasharray="6 5" marker-end="url(#arrowOrange)"/>
+
+    <rect x="420" y="380" width="160" height="34" rx="17" fill="#2a0d12" stroke="#ff5f56"/>
+    <text x="500" y="402" fill="#ff5f56" font-size="14" font-weight="700" text-anchor="middle">UAF &#8594; data abort</text>
+  </g>
+</svg>

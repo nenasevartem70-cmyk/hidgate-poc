@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 320" width="900" height="320" role="img" aria-label="Kernel data abort panic excerpt">
+  <defs>
+    <linearGradient id="term" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0c131b"/>
+      <stop offset="1" stop-color="#060a0f"/>
+    </linearGradient>
+    <linearGradient id="bar" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#ff4d4d"/>
+      <stop offset="1" stop-color="#ff9f43"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="900" height="320" fill="#080c12"/>
+  <rect x="28" y="24" width="844" height="272" rx="14" fill="url(#term)" stroke="#2b4053" stroke-width="1.5"/>
+  <rect x="28" y="24" width="844" height="42" rx="14" fill="#101a24"/>
+  <rect x="28" y="52" width="844" height="14" fill="#101a24"/>
+  <circle cx="52" cy="45" r="6" fill="#ff5f56"/>
+  <circle cx="74" cy="45" r="6" fill="#ffbd2e"/>
+  <circle cx="96" cy="45" r="6" fill="#27c93f"/>
+  <text x="120" y="50" fill="#6f8498" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13">panic-full &#183; iOS 18.7.2 &#183; iPhone XR</text>
+
+  <rect x="28" y="66" width="6" height="230" fill="url(#bar)"/>
+
+  <g font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">
+    <text x="58" y="105" fill="#ff5f56" font-size="22" font-weight="700">Kernel data abort</text>
+    <text x="58" y="134" fill="#8fa6bb" font-size="13">Panicked task: hidgate4 &#183; backtrace: IOHIDFamily / AppleSPU</text>
+
+    <text x="58" y="176" fill="#c7d5e3" font-size="14">pc   </text>
+    <text x="120" y="176" fill="#f5f7fa" font-size="14">0xfffffff02405c388</text>
+    <text x="58" y="202" fill="#c7d5e3" font-size="14">x16  </text>
+    <text x="120" y="202" fill="#ffb86b" font-size="14">0x0020000000000000</text>
+    <text x="58" y="228" fill="#c7d5e3" font-size="14">far  </text>
+    <text x="120" y="228" fill="#ffb86b" font-size="14">0x0020000000000038</text>
+    <text x="58" y="254" fill="#c7d5e3" font-size="14">esr  </text>
+    <text x="120" y="254" fill="#c7d5e3" font-size="14">0x0000000096000004</text>
+
+    <line x1="58" y1="274" x2="842" y2="274" stroke="#25384a"/>
+    <text x="58" y="296" fill="#8fa6bb" font-size="13">ldr x8, [x16, #0x38]!</text>
+    <text x="520" y="296" fill="#6f8498" font-size="12">virtual call through a corrupted object pointer</text>
+  </g>
+</svg>
