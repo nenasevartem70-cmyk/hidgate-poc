@@ -279,6 +279,13 @@ dequeue, and the probe walked the stale node. It is a reliable UAF trigger in
 our own app, without Camera. The reclaim still did not replace the stale
 object (`x12` is zero), so S4 (write/double-free) is not closed.
 
+A second `jpegclose` run with an early+late 4032×3024 `flags=1` reclaim storm
+still produced the same `far=0x308`, `x12=0` fault. The likely causes are a
+codec/pool mismatch (4032 vs the 2048 victim/mass-spray pool) and the
+progressive flag on a baseline JPEG failing validation before the node is
+queued. `jpegclose6` fixes both: 2048×2048, `flags=0`, early+late storms of
+6 connections × 5 requests, probe 50 ms after the storm.
+
 ## Next steps
 
 1. Run `jpegclose` variants: reclaim after the timeout free, not before it,

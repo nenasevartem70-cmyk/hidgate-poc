@@ -31,7 +31,7 @@ time; installing the next one overwrites the previous app.
 | T6 | `jpegreclaim.m` | Same-type reclaim after timeout | 10 async submitted, no panic | **PASS** |
 | T7 | `jpegreclaim.m` immediate close | Persistent stale / power wedge | `setPowerState(1 -> 0) timed out after 10210 ms` | **PASS (DoS)** |
 | T8 | `experiments/applejpeg/jpegclose.m` | Close during sync (`isInactive`) | `far=0x308` without Camera | **PASS (UAF)** |
-| T9 | `experiments/applejpeg/jpegclose3.m` | Early + late reclaim storm around the inactive close | `x12 != 0`, new `far`, or double-free | **PENDING** |
+| T9 | `experiments/applejpeg/jpegclose6.m` | Early + late 2048/flags=0 reclaim storm around the inactive close | `x12 != 0`, new `far`, or double-free | **PENDING** |
 
 ### Revision note
 
@@ -210,10 +210,22 @@ Expected variants:
 
 ## T9 — Reclaim storm around the inactive close
 
-Source: [`../experiments/applejpeg/jpegclose3.m`](../experiments/applejpeg/jpegclose3.m)
+Source: [`../experiments/applejpeg/jpegclose6.m`](../experiments/applejpeg/jpegclose6.m)
 
 The T8 panic still shows `x12=0`: the probe hit a stale node, not a reclaimed
 request. T9 changes the timing:
+
+### Variant history
+
+- `jpegclose3`: 4032×3024 reclaims with `flags=1` (progressive bit) on a
+  baseline JPEG. It still panicked at `far=0x308`, `x12=0`. The 4032 pool may
+  differ from the 2048 victim/mass-spray pool, and `flags=1` may fail
+  validation before the node is queued.
+- `jpegclose6`: **2048×2048, `flags=0`** (valid baseline) for both storms,
+  6 connections × 5 requests each, appended, with the probe 50 ms after the
+  storm. This matches the victim pool and keeps valid requests in flight.
+- `jpegclose5`: same as `jpegclose6` but without the mass spray, to isolate
+  the victim request.
 
 1. Mass prime 8000 requests.
 2. Start an **early reclaim storm**: 6 connections × 3 async 4032×3024
