@@ -118,16 +118,36 @@ stale `JpegRequest` read. The panicking thread was `kernel_task` tid 289,
 not the app, confirming the deferred completion path. Full analysis:
 [`applejpeg-panic-2026-10-30.md`](applejpeg-panic-2026-10-30.md).
 
+### Reclaim race, first run
+
+`jpegreclaim` ran four reclaimer threads: **2962 connections / 14,809 async
+requests / 0 open failures**. The three "sync" rounds returned instantly:
+
+```
+sync round=0 kr=0 dt=0.000s
+sync round=1 kr=0 dt=0.001s
+sync round=2 kr=0 dt=0.000s
+```
+
+Cause: the trigger input still carried a non-zero async token, so the driver
+treated the call as asynchronous and returned immediately. The reclaimer
+itself worked; it was simply never aligned with a timeout. Fixed build uses
+`asyncToken = 0`, `flags = 0` for the sync trigger, keeps the reclaimer alive
+for 45 s before Camera, and requests a background task so the storm continues
+for ~30 s after the app is backgrounded.
+
 ## Next steps
 
-1. Build `jpegreclaim`: force a sync decode timeout (`kIOReturnTimeout`,
-   `0xe00002d6`) and race same-type `JpegRequest` allocations into the freed
-   slot.
+1. Run the fixed `jpegreclaim` and confirm `sync round=... kr=0xe00002d6`
+   (`kIOReturnTimeout`, `dt ~= 10 s`).
 2. Observe whether the panic disappears, changes registers, or turns into a
    double-free/write fault.
-3. If the UAF becomes a controlled reuse, target the request fields before
+3. If the sync trigger still returns instantly, switch to an in-app camera
+   picker/AVCapture trigger so the reclaimer stays alive during the real
+   Camera decode.
+4. If the UAF becomes a controlled reuse, target the request fields before
    the PAC-protected `*(*(request+0)+40)()` call.
-4. If direct PC control is blocked by PAC, look for a write/double-free
+5. If direct PC control is blocked by PAC, look for a write/double-free
    primitive in the same path.
 
 ## Safety

