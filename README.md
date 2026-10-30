@@ -35,6 +35,12 @@ reliably produces a **kernel data abort** on iOS 18.7.2 (A12 / iPhone XR).
 | Patched in | iOS 18.7.9 / iPadOS 18.7.9 and iOS 26.5 / iPadOS 26.5 |
 | Tested on | iPhone XR (`iPhone11,8`), iOS 18.7.2 (22H124), A12 |
 | Result | Kernel data abort / panic, device reboots |
+| Control status | Crash-only on the reachable SPU provider; AppleJPEGDriver lead active |
+
+The IOHID fast-path object is provider-side: `copyEvent` never delivers an
+event on this target (245,808 attempts, all `kIOReturnNoResources`), so the
+free cannot be raced from userland. The next control lead is
+[CVE-2026-20687 in AppleJPEGDriver](docs/applejpeg-cve-2026-20687.md).
 
 The original research and PoC were published by **Johnny Franks
 (@0xjohnny)**. This repository contains a standalone build of the same

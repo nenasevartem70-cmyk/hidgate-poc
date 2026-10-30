@@ -44,15 +44,62 @@ logs are kept private; only redacted fields are published.
    the loop produced billions of errors. This needs a backoff/re-scan test
    (`hidgate10`) before drawing conclusions.
 
+## 2026-10-30 — control closure and AppleJPEG pivot
+
+### IOHID fast path: `copyEvent` is closed on this provider
+
+`copyprobe3` found the correct `sel2` ABI:
+
+| Input | Result |
+|---|---|
+| `outc=0` | `0xe00002be` (`kIOReturnNoResources`) |
+| `outc=1/2` | `0xe00002c2` (`kIOReturnBadArgument`) |
+
+`SharedMemorySize` in the gate dictionary is accepted (`gate=0x0`). The
+`NoResources` result means the handler is reached but the fast-path event
+queue is empty.
+
+`copyprobe4` then hammered `sel2` for 30 seconds while the device was shaken:
+**245,808 attempts, `ok=0`, every call `0xe00002be`.** The SPU provider never
+delivers a fast-path event to this client. `copyEvent` cannot be used to race
+the free.
+
+Conclusion: on the only reachable provider, CVE-2026-28992 is **crash-only**.
+The freed object is provider-side; userland sprays (generic, targeted, OOL,
+SPU client) do not reclaim it.
+
+### AppleJPEGDriver: new control lead
+
+Pivot to **CVE-2026-20687** (`AppleJPEGDriver` decoder timeout UAF, Apple
+impact: *write kernel memory*). Static check of the 18.7.2 kext
+(`com.apple.driver.AppleJPEGDriver`, version 7.6.9) confirms the vulnerable
+machinery is present:
+
+- `startDecoder`, `startEncoder`, `startDecoderExt`, `startDecoder2024`;
+- `queue_io_gated`, `finish_io_gated`, `clientClosedGated`;
+- `AppleJPEGDriver: %s(): TIMEOUT %dms`;
+- the `0x58`-byte `AppleJPEGDriverIOStruct` field layout used by the public
+  PoC.
+
+The public PoC triggers the bug by submitting async decodes, closing the
+connection, and then opening Camera to force a sync decode timeout. The freed
+`JpegRequest` (0x440) keeps its queue node at `request+0x78`; the next queue
+walk dereferences `request+0x80`.
+
+`jpegprobe` was built to verify reachability from the app sandbox:
+open type 0, selector sanity checks, 64×64 decode, then five 2048×2048 async
+decodes and an immediate close. See
+[`applejpeg-cve-2026-20687.md`](applejpeg-cve-2026-20687.md).
+
 ## Next steps
 
-1. Run `hidgate10` with backoff and raw in-thread IOSurface allocation.
-2. If the fault changes to `0x4141...`, the slot is reclaimable with
-   controlled data; move to fake vtable/ROP.
-3. If the fault stays `0x0020...`, stop blind spraying and identify the exact
-   object/zone from the IOHIDFamily/AppleSPU kext.
-4. If the panic disappears but the test is valid, determine whether the object
-   was reclaimed by a legitimate client or the vulnerable path was avoided.
+1. Run `jpegprobe` and check whether `IOServiceOpen("AppleJPEGDriver", 0)`
+   succeeds from the sideloaded app.
+2. If `sel1` accepts the `0x58` struct, confirm the async prime and the
+   Camera-triggered panic; capture the `AppleJPEGDriver` backtrace.
+3. If the UAF is confirmed, reclaim `JpegRequest` with controlled data and
+   target the `*(*(request+0)+40)()` virtual call.
+4. If the service is blocked, pivot to another reachable 18.7.2 kernel CVE.
 
 ## Safety
 
