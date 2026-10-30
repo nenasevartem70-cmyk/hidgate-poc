@@ -43,6 +43,38 @@ kernel context is a direct primitive.
 Every call logs `kr` and `outSize`. The last log line before a panic tells us
 which selector is dangerous.
 
+## First probe result (2026-10-31)
+
+`jpegmethods` on the XR:
+
+```
+open type0 kr=0
+sel0 getTarget kr=0xe00002c2
+sel2 query kr=0xe00002c2
+sel1 decode sync kr=0 outSize=88
+sel1 decode async kr=0 outSize=88
+sel3 encode sync kr=0xe00002bc outSize=88
+sel4 0x1000 struct kr=0xe00002bc outSize=4096
+sel5 0x1000 struct kr=0xe00002cc outSize=4096
+sel6 async decode 0xDA0 kr=0xe00002bc outSize=3488
+sel7 async encode 0xDA0 kr=0xe00002bc outSize=3488
+sel8 privileged 4 bytes kr=0xe00002c2
+sel9 privileged no args kr=0xe00002bc
+sel10 out of range kr=0xe00002c2
+jpegmethods done (no panic)
+```
+
+The important part: `sel4/5/6/7` are **reachable**. They return the full
+output size (`4096` / `3488`), so the handler ran and rejected our input,
+rather than returning `kIOReturnUnsupported`. The next probe adds a
+notification port, proper encode surfaces (BGRA source, raw JPEG dest), and
+tries the 0x58 decode header at offsets `0`, `0x10`, `0x58`, `0x100` inside
+the 0xDA0/0x1000 structs.
+
+`jpegmethods2` also drains the notification port after every call. If the
+driver sends async completion messages, their `msgh_id`/payload may be the
+first kernel-side data we can read.
+
 ## What to look for
 
 | Observation | Meaning |
