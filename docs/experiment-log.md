@@ -91,15 +91,44 @@ open type 0, selector sanity checks, 64×64 decode, then five 2048×2048 async
 decodes and an immediate close. See
 [`applejpeg-cve-2026-20687.md`](applejpeg-cve-2026-20687.md).
 
+### Confirmed: deferred kernel UAF
+
+`jpegprobe` opened the userclient (`kr=0`), accepted the `0x58` struct
+(`sel1 sync444 kr=0`, `sel1 async64 kr=0`), submitted five async 2048×2048
+decodes, and closed. Opening Camera then produced a panic inside
+`AppleJPEGDriver 7.6.9`:
+
+```
+pc  = 0xfffffff01157f418   (0xfffffff008df3418 unslid)
+lr  = 0xfffffff011582638   (0xfffffff008df6638 unslid)
+x5  = 0xfeedfacefeedfacf
+x6  = 0xfeedfacefeedfacf
+x12 = 0
+far = 0x308
+```
+
+Faulting instruction:
+
+```asm
+ldrb w12, [x12, #0x308]
+```
+
+Call chain: `finish_io_gated` (0x8df65e0) → queue helper (0x8df33ec) →
+stale `JpegRequest` read. The panicking thread was `kernel_task` tid 289,
+not the app, confirming the deferred completion path. Full analysis:
+[`applejpeg-panic-2026-10-30.md`](applejpeg-panic-2026-10-30.md).
+
 ## Next steps
 
-1. Run `jpegprobe` and check whether `IOServiceOpen("AppleJPEGDriver", 0)`
-   succeeds from the sideloaded app.
-2. If `sel1` accepts the `0x58` struct, confirm the async prime and the
-   Camera-triggered panic; capture the `AppleJPEGDriver` backtrace.
-3. If the UAF is confirmed, reclaim `JpegRequest` with controlled data and
-   target the `*(*(request+0)+40)()` virtual call.
-4. If the service is blocked, pivot to another reachable 18.7.2 kernel CVE.
+1. Build `jpegreclaim`: force a sync decode timeout (`kIOReturnTimeout`,
+   `0xe00002d6`) and race same-type `JpegRequest` allocations into the freed
+   slot.
+2. Observe whether the panic disappears, changes registers, or turns into a
+   double-free/write fault.
+3. If the UAF becomes a controlled reuse, target the request fields before
+   the PAC-protected `*(*(request+0)+40)()` call.
+4. If direct PC control is blocked by PAC, look for a write/double-free
+   primitive in the same path.
 
 ## Safety
 
