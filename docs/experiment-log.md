@@ -286,6 +286,12 @@ progressive flag on a baseline JPEG failing validation before the node is
 queued. `jpegclose6` fixes both: 2048×2048, `flags=0`, early+late storms of
 6 connections × 5 requests, probe 50 ms after the storm.
 
+Control run: `jpegclose5` (same storm, **no mass spray**) returned
+`victim sync kr=0 dt=0.004–0.008s` twice. The decode finished before the
+100 ms close, so no stale node was created and the app ended with
+`no panic`. The mass spray is required to keep the victim decode in flight;
+`jpegclose6` is the actual T9 test.
+
 ## Next steps
 
 1. Run `jpegclose` variants: reclaim after the timeout free, not before it,

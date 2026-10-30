@@ -225,7 +225,9 @@ request. T9 changes the timing:
   6 connections × 5 requests each, appended, with the probe 50 ms after the
   storm. This matches the victim pool and keeps valid requests in flight.
 - `jpegclose5`: same as `jpegclose6` but without the mass spray, to isolate
-  the victim request.
+  the victim request. Observed control: `victim sync kr=0 dt=0.004–0.008s`,
+  so the decode finished **before** the 100 ms close; no stale node and no
+  panic. The mass spray is required to keep the victim decode in flight.
 
 1. Mass prime 8000 requests.
 2. Start an **early reclaim storm**: 6 connections × 3 async 4032×3024
