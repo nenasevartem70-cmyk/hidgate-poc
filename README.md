@@ -188,6 +188,7 @@ Full details:
 
 - [`docs/applejpeg-cve-2026-20687.md`](docs/applejpeg-cve-2026-20687.md)
 - [`docs/applejpeg-panic-2026-10-30.md`](docs/applejpeg-panic-2026-10-30.md)
+- [`docs/applejpeg-methods.md`](docs/applejpeg-methods.md) — selector audit
 - [`docs/kernel-control.md`](docs/kernel-control.md)
 - Sources: [`experiments/applejpeg/`](experiments/applejpeg/)
 

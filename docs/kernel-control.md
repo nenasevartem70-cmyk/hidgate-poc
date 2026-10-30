@@ -142,7 +142,11 @@ which needs either a PAC oracle or a kernel read. Neither exists yet.
 3. **Turn the second free into a write.** Look for a path that releases the
    request's `IOSurface`/`IOUserClient` references twice, or that writes to a
    freed request field we control.
-4. **Only then** revisit PAC: a kernel read or a signed-pointer leak is
+4. **Audit the other AppleJPEG selectors in parallel.** `sel3` (encode),
+   `sel4`/`sel5` (0x1000), `sel6`/`sel7` (0xDA0 async), and `sel8`/`sel9`
+   (privileged) may expose a direct user pointer or a write path. See
+   [`applejpeg-methods.md`](applejpeg-methods.md).
+5. **Only then** revisit PAC: a kernel read or a signed-pointer leak is
    required before the `blraa` path can be used.
 
 ## What would count as control
@@ -159,6 +163,7 @@ A panic alone, including the `setPowerState` timeout, is **not** control.
 
 ## Direct links
 
+- AppleJPEG selector audit: [`applejpeg-methods.md`](applejpeg-methods.md)
 - Jailbreak project built on this research: https://github.com/nenasevartem70-cmyk/hidra
 - Apple security content, iOS 26.4 / iPadOS 26.4 (CVE-2026-20687):
   https://support.apple.com/en-us/126792
