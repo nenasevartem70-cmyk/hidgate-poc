@@ -20,7 +20,7 @@ the next gate is a **double-free / write primitive**, not a fake vtable.
 | 1. Reproducible UAF | **PASS** | AppleJPEG `finish_io_gated` reads a freed `JpegRequest`; `x5/x6=0xfeedface...` |
 | 2. Controlled free | **PASS** | `sel1` sync returns `kIOReturnTimeout` (`0xe00002d6`) after 10.001 s |
 | 3. Same-type reclaim | **PASS** | 10 async requests on the same connection immediately after the timeout; kernel survives |
-| 4. Persistent stale node | **PARTIAL** | Immediate close leaves the driver wedged in `setPowerState(1 -> 0)`; no controlled walk yet |
+| 4. Persistent stale node | **PASS (UAF)** | Close during sync reproduces the `far=0x308` read without Camera |
 | 5. Write / read primitive | **NOT YET** | No arbitrary kernel read/write or controlled free of a second object |
 | 6. PAC / PPL bypass | **NOT YET** | `autda` + `blraa` on the `request->task` call are enforced |
 | 7. Kernel r/w + jailbreak | **NOT YET** | Requires levels 5–6 |
@@ -90,6 +90,26 @@ AppleJPEGDriver::setPowerState(0xffffffdef7cb1880, 1 -> 0)
 This is a repeatable kernel hang, but it is **not** the queue-walk UAF and it
 does not provide control. It masks the stale node because the power watchdog
 fires first.
+
+### 5. Persistent UAF trigger
+
+`jpegclose` closes the victim userclient while a sync decode is in flight.
+`terminatePhase1` marks the client inactive early; the timeout free skips the
+dequeue, and a fresh sync probe walks the stale node:
+
+```
+jpegclose + probe
+pc  = 0xfffffff014d23418   (0xfffffff008df3418 unslid)
+lr  = 0xfffffff014d26638   (0xfffffff008df6638 unslid)
+x5  = 0
+x6  = 0x00000007839956d4
+x12 = 0
+far = 0x308
+```
+
+This is the **same read UAF**, now reproducible without Camera. It confirms
+the inactive free path, but the reclaim did not replace the stale object
+(`x12` is zero), so it is still not a write/double-free primitive.
 
 ## Why direct PC control is blocked
 

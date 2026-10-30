@@ -30,7 +30,7 @@ time; installing the next one overwrites the previous app.
 | T5 | `experiments/applejpeg/jpegreclaim.m` | Controlled 10 s timeout | `kr=0xe00002d6`, `dt=10.001s` | **PASS** |
 | T6 | `jpegreclaim.m` | Same-type reclaim after timeout | 10 async submitted, no panic | **PASS** |
 | T7 | `jpegreclaim.m` immediate close | Persistent stale / power wedge | `setPowerState(1 -> 0) timed out after 10210 ms` | **PASS (DoS)** |
-| T8 | `experiments/applejpeg/jpegclose.m` | Close during sync (`isInactive`) | `far=0x308` or a new fault | **PENDING** |
+| T8 | `experiments/applejpeg/jpegclose.m` | Close during sync (`isInactive`) | `far=0x308` without Camera | **PASS (UAF)** |
 
 ### Revision note
 
@@ -172,13 +172,31 @@ AppleJPEGDriver::setPowerState(0x..., 1 -> 0)
 
 This is a repeatable DoS/hang, not the queue-walk UAF.
 
-## T8 — Close during sync (pending)
+## T8 — Close during sync
 
 Source: [`../experiments/applejpeg/jpegclose.m`](../experiments/applejpeg/jpegclose.m)
 
 1. Install `jpegclose`.
 2. Launch it.
 3. Wait for `victim sync`, `victim close`, `reclaim submitted`, `probe`.
+
+### Observed result (2026-10-31 01:02:05)
+
+The close-during-sync path reproduced the **same 0x308 UAF without Camera**:
+
+```
+pc  = 0xfffffff014d23418   (0xfffffff008df3418 unslid)
+lr  = 0xfffffff014d26638   (0xfffffff008df6638 unslid)
+x5  = 0
+x6  = 0x00000007839956d4
+x12 = 0
+far = 0x308
+```
+
+Call chain is identical: `finish_io_gated` → queue helper → stale
+`JpegRequest`. This is a reliable UAF trigger in our own app, but it is still
+a **read** UAF; the reclaim did not replace the stale object (`x12` is zero).
+It is not a double-free or write primitive.
 
 Expected variants:
 

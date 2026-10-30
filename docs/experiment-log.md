@@ -260,10 +260,29 @@ closes the userclient **while the sync decode is in flight**, which is the
 real `isInactive` path from the CVE, then reclaims on a fresh connection and
 probes.
 
+### Close during sync reproduces the UAF without Camera
+
+`jpegclose` closes the victim userclient while a sync decode is in flight and
+then probes the queue. The device panicked with the same read UAF:
+
+```
+pc  = 0xfffffff014d23418   (0xfffffff008df3418 unslid)
+lr  = 0xfffffff014d26638   (0xfffffff008df6638 unslid)
+x5  = 0
+x6  = 0x00000007839956d4
+x12 = 0
+far = 0x308
+```
+
+This confirms the `isInactive` free path: the timeout free skipped the
+dequeue, and the probe walked the stale node. It is a reliable UAF trigger in
+our own app, without Camera. The reclaim still did not replace the stale
+object (`x12` is zero), so S4 (write/double-free) is not closed.
+
 ## Next steps
 
-1. Run `jpegclose`: close the victim userclient during the sync decode,
-   reclaim on a fresh connection, and trigger a sync probe.
+1. Run `jpegclose` variants: reclaim after the timeout free, not before it,
+   and keep the reclaim requests in flight.
 2. If the probe panics at `far=0x308`, the inactive free left the node and we
    can chain the reclaim into a persistent UAF.
 3. If it survives, the node is being dequeued even on the inactive path; the
