@@ -330,7 +330,9 @@ static void reclaimAll(void) {
             int n = submitAsync(c, srcID, dstID, W, H, 10,
                                 0x51510000 + (round << 8), 1);
             appendLog(@"cycle round=%d reclaim submitted=%d", round, n);
-            usleep(100000);
+            /* Close immediately: the reclaimer requests are still in flight,
+               so clientClosedGated takes the inactive path and the embedded
+               queue nodes are not dequeued. */
         }
         IOServiceClose(c);
         appendLog(@"cycle round=%d closed", round);

@@ -208,10 +208,41 @@ storm **before** the sync cycle. The goal is to push the first sync past 10 s,
 get `kIOReturnTimeout`, and have the storm plus the same-connection allocation
 already in flight when the request is freed.
 
+### Timeout + same-thread reclaim, no panic
+
+`jpegstall3` hit the real timeout:
+
+```
+cycle round=2 sync kr=0xe00002d6 dt=10.002s
+cycle round=2 TIMEOUT -> same-conn reclaim
+cycle round=2 reclaim submitted=10
+cycle round=2 closed
+storm conn=9266 req=46330 fail=0
+jpegreclaim done (no panic)
+```
+
+This is the first run where the 10 s timeout freed a request and the very
+next allocations were same-type `JpegRequest`s on the same connection, yet
+the kernel survived. Two interpretations remain:
+
+1. the freed slot was replaced by a live reclaimer request, so the stale
+   queue node no longer pointed at poison;
+2. the reclaimer requests completed and their normal `queue_remove` cleaned
+   the stale node before the queue walk.
+
+The next build closes the connection **immediately** after the reclaim
+submission, so the reclaimer requests are still in flight and
+`clientClosedGated` takes the inactive path (no dequeue). That should leave
+the embedded node stale and tell us which interpretation is correct.
+
 ## Next steps
 
-1. Run `jpegstall3` (8000-request prime, storm first) and confirm
-   `cycle round=0 sync kr=0xe00002d6` (`dt ~= 10 s`).
+1. Run `jpegstall4` (immediate close after reclaim) and check whether the
+   kernel panics again at `far=0x308`.
+2. If it panics, the stale node survives and we can chain another
+   same-type reclaim into a persistent UAF.
+3. If it survives, the reclaimer completion is cleaning the queue; the next
+   step is a request that deliberately never completes before the walk.
 2. Observe whether the panic disappears, changes registers, or turns into a
    double-free/write fault.
 3. If the sync trigger still returns instantly, switch to an in-app camera
