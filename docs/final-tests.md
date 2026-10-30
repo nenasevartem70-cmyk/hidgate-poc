@@ -31,6 +31,7 @@ time; installing the next one overwrites the previous app.
 | T6 | `jpegreclaim.m` | Same-type reclaim after timeout | 10 async submitted, no panic | **PASS** |
 | T7 | `jpegreclaim.m` immediate close | Persistent stale / power wedge | `setPowerState(1 -> 0) timed out after 10210 ms` | **PASS (DoS)** |
 | T8 | `experiments/applejpeg/jpegclose.m` | Close during sync (`isInactive`) | `far=0x308` without Camera | **PASS (UAF)** |
+| T9 | `experiments/applejpeg/jpegclose3.m` | Early + late reclaim storm around the inactive close | `x12 != 0`, new `far`, or double-free | **PENDING** |
 
 ### Revision note
 
@@ -206,6 +207,49 @@ Expected variants:
 | `probe kr=0xe00002d6` | probe also timed out; node present but walk delayed |
 | `probe kr=0` then power-state timeout | node present, power watchdog wins |
 | no panic | inactive path also dequeues; need a non-completing request |
+
+## T9 — Reclaim storm around the inactive close
+
+Source: [`../experiments/applejpeg/jpegclose3.m`](../experiments/applejpeg/jpegclose3.m)
+
+The T8 panic still shows `x12=0`: the probe hit a stale node, not a reclaimed
+request. T9 changes the timing:
+
+1. Mass prime 8000 requests.
+2. Start an **early reclaim storm**: 6 connections × 3 async 4032×3024
+   requests, held open. This covers the mass-spray stale slots.
+3. Open the victim connection, start a sync decode, close the victim during
+   the decode (the `isInactive` path).
+4. Start a **second reclaim storm**: 6 connections × 3 async 4032×3024
+   requests, appended to the early set.
+5. Probe three times while the reclaim requests are in flight.
+6. Free one reclaimer connection at a time and probe after each; if the stale
+   node points into that request, the next walk is a use-after-free with a
+   slot we control.
+
+Expected log:
+
+```
+early reclaim start threads=6 reqs=3
+early reclaim done conns=6
+victim open kr=0
+victim sync kr=... dt=...
+victim close kr=...
+reclaim storm start threads=6 reqs=3
+reclaim storm done conns=12
+probe round=0 kr=...
+free reclaim[0] conn=...
+probe-after-free[0] kr=...
+```
+
+Pass criteria for S4:
+
+| Observation | Meaning |
+|---|---|
+| `x12 != 0` in a panic | stale node points at our reclaim request |
+| `far != 0x308` | different object/offset, likely write or double-free |
+| `kalloc`/`zone` in backtrace | double-free detected |
+| no panic after freeing a reclaimer | node was cleaned; tune the in-flight window |
 
 ## How to collect logs
 

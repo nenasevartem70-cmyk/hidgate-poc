@@ -136,7 +136,9 @@ which needs either a PAC oracle or a kernel read. Neither exists yet.
    Build: `jpegclose`.
 2. **Keep the reclaim request from completing.** If the reclaim request
    completes, its normal `queue_remove` can clean the stale node. Use an
-   in-flight request that never reaches completion before the walk.
+   in-flight request that never reaches completion before the walk. T9 does
+   this with an early + late storm of 4032×3024 reclaim requests and frees
+   one connection at a time while probing.
 3. **Turn the second free into a write.** Look for a path that releases the
    request's `IOSurface`/`IOUserClient` references twice, or that writes to a
    freed request field we control.
