@@ -292,6 +292,23 @@ Control run: `jpegclose5` (same storm, **no mass spray**) returned
 `no panic`. The mass spray is required to keep the victim decode in flight;
 `jpegclose6` is the actual T9 test.
 
+`jpegclose6` then panicked with the **same read UAF**:
+
+```
+pc  = 0xfffffff015bab418   (0xfffffff008df3418 unslid)
+lr  = 0xfffffff015bae638   (0xfffffff008df6638 unslid)
+x5  = 0xfeedfacefeedfacf
+x6  = 0xfeedfacefeedfad3
+x12 = 0
+far = 0x308
+```
+
+The poison values show the stale node still points at a freed object. The
+2048/flags=0 storm did not cover that slot. The likely reason is a
+**codec/pool mismatch**: Camera was running (pid 511) and may have freed the
+request in a codec sub-vector the codec-0 storm never touched. `jpegclose7`
+sweeps codec IDs `0..3` with eight connections per storm.
+
 ## Next steps
 
 1. Run `jpegclose` variants: reclaim after the timeout free, not before it,

@@ -31,7 +31,7 @@ time; installing the next one overwrites the previous app.
 | T6 | `jpegreclaim.m` | Same-type reclaim after timeout | 10 async submitted, no panic | **PASS** |
 | T7 | `jpegreclaim.m` immediate close | Persistent stale / power wedge | `setPowerState(1 -> 0) timed out after 10210 ms` | **PASS (DoS)** |
 | T8 | `experiments/applejpeg/jpegclose.m` | Close during sync (`isInactive`) | `far=0x308` without Camera | **PASS (UAF)** |
-| T9 | `experiments/applejpeg/jpegclose6.m` | Early + late 2048/flags=0 reclaim storm around the inactive close | `x12 != 0`, new `far`, or double-free | **PENDING** |
+| T9 | `experiments/applejpeg/jpegclose7.m` | Codec sweep 0–3 reclaim storm around the inactive close | `x12 != 0`, new `far`, or double-free | **PENDING** |
 
 ### Revision note
 
@@ -210,10 +210,10 @@ Expected variants:
 
 ## T9 — Reclaim storm around the inactive close
 
-Source: [`../experiments/applejpeg/jpegclose6.m`](../experiments/applejpeg/jpegclose6.m)
+Source: [`../experiments/applejpeg/jpegclose7.m`](../experiments/applejpeg/jpegclose7.m)
 
 The T8 panic still shows `x12=0`: the probe hit a stale node, not a reclaimed
-request. T9 changes the timing:
+request. T9 changes the timing and the allocation pool:
 
 ### Variant history
 
@@ -223,19 +223,26 @@ request. T9 changes the timing:
   validation before the node is queued.
 - `jpegclose6`: **2048×2048, `flags=0`** (valid baseline) for both storms,
   6 connections × 5 requests each, appended, with the probe 50 ms after the
-  storm. This matches the victim pool and keeps valid requests in flight.
+  storm. It still panicked at `far=0x308`, `x12=0`; `x5/x6` were
+  `0xfeedfacefeedfacf` / `0xfeedfacefeedfad3`, i.e. a freed-poison object.
+  The reclaim did not cover the stale slot.
 - `jpegclose5`: same as `jpegclose6` but without the mass spray, to isolate
   the victim request. Observed control: `victim sync kr=0 dt=0.004–0.008s`,
   so the decode finished **before** the 100 ms close; no stale node and no
   panic. The mass spray is required to keep the victim decode in flight.
+- `jpegclose7`: **codec sweep**. Both storms open one connection per codec
+  (`0..3`, eight threads → two connections per codec) and submit 5 × 2048
+  `flags=0` requests with that `codecID`. The Camera may free a request in a
+  codec/pool that the previous 2048/codec-0 storm never touched.
 
 1. Mass prime 8000 requests.
-2. Start an **early reclaim storm**: 6 connections × 3 async 4032×3024
-   requests, held open. This covers the mass-spray stale slots.
+2. Start an **early reclaim storm**: 8 connections, two per codec (`0..3`),
+   5 async 2048×2048 `flags=0` requests each, held open. This covers the
+   mass-spray stale slots in every codec sub-vector.
 3. Open the victim connection, start a sync decode, close the victim during
    the decode (the `isInactive` path).
-4. Start a **second reclaim storm**: 6 connections × 3 async 4032×3024
-   requests, appended to the early set.
+4. Start a **second reclaim storm**: another 8 connections, appended to the
+   early set.
 5. Probe three times while the reclaim requests are in flight.
 6. Free one reclaimer connection at a time and probe after each; if the stale
    node points into that request, the next walk is a use-after-free with a
@@ -244,13 +251,13 @@ request. T9 changes the timing:
 Expected log:
 
 ```
-early reclaim start threads=6 reqs=3
-early reclaim done conns=6
+early reclaim start threads=8 reqs=5
+early reclaim done conns=8
 victim open kr=0
 victim sync kr=... dt=...
 victim close kr=...
-reclaim storm start threads=6 reqs=3
-reclaim storm done conns=12
+reclaim storm start threads=8 reqs=5
+reclaim storm done conns=16
 probe round=0 kr=...
 free reclaim[0] conn=...
 probe-after-free[0] kr=...
