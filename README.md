@@ -41,6 +41,12 @@ The original research and PoC were published by **Johnny Franks
 technique, with service enumeration and a panic-log analysis from the
 18.7.2/A12 target.
 
+## Research roadmap
+
+<p align="center">
+  <img src="assets/roadmap.svg" alt="Crash to control to jailbreak roadmap" width="100%">
+</p>
+
 ## Patch timeline
 
 <p align="center">

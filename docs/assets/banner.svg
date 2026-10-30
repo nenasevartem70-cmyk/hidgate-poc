@@ -38,6 +38,13 @@
   <text x="72" y="205" fill="#ffb86b" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="27">IOHIDFamily FastPathUserClient</text>
   <text x="72" y="243" fill="#a9bccd" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="21">race / use-after-free &#8594; kernel data abort</text>
   <text x="72" y="306" fill="#6f8498" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="15">hidgate4 &#183; iPhone XR &#183; crash PoC, not a jailbreak</text>
+  <rect x="540" y="292" width="10" height="17" fill="#ffb86b" opacity="0.9">
+    <animate attributeName="opacity" values="0.1;1;0.1" dur="1.1s" repeatCount="indefinite"/>
+  </rect>
+
+  <rect x="0" y="0" width="1200" height="2" fill="#58a6ff" opacity="0.16">
+    <animate attributeName="y" from="0" to="360" dur="7s" repeatCount="indefinite"/>
+  </rect>
 
   <g transform="translate(790 62)">
     <rect x="0" y="0" width="350" height="236" rx="12" fill="url(#terminal)" stroke="#25384a" stroke-width="1.5"/>
