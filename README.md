@@ -21,6 +21,9 @@ reliably produces a **kernel data abort** on iOS 18.7.2 (A12 / iPhone XR).
 > not install anything. It intentionally panics the kernel and reboots the
 > device.
 
+> **«Паника — это не конец. Это доказательство, что мы уже в ядре.»**
+> **Crash → Control → Jailbreak.**
+
 ## Status
 
 | Item | Value |

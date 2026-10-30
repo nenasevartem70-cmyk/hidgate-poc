@@ -227,6 +227,27 @@
 
     .warn strong { color: var(--red); }
 
+    .credo {
+      border-left: 4px solid var(--orange);
+      background: linear-gradient(90deg, rgba(255,184,107,.08), rgba(255,184,107,.02));
+      border-radius: 12px;
+      padding: 18px 20px;
+      margin: 24px 0;
+    }
+
+    .credo p {
+      margin: 0;
+      font-size: 18px;
+      color: var(--text);
+    }
+
+    .credo .sub {
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: 13px;
+      letter-spacing: .5px;
+    }
+
     .links {
       display: flex;
       flex-wrap: wrap;
@@ -294,6 +315,11 @@
       <img alt="Status" src="https://img.shields.io/badge/status-crash%20PoC-ff9f43?style=for-the-badge&labelColor=1a140b">
       <img alt="License" src="https://img.shields.io/badge/license-MIT-27c93f?style=for-the-badge&labelColor=0b1219">
       <a href="https://github.com/nenasevartem70-cmyk/hidgate-poc/actions/workflows/build.yml"><img alt="Build" src="https://github.com/nenasevartem70-cmyk/hidgate-poc/actions/workflows/build.yml/badge.svg"></a>
+    </div>
+
+    <div class="credo">
+      <p>«Паника — это не конец. Это доказательство, что мы уже в ядре.»</p>
+      <p class="sub">CRASH &#8594; CONTROL &#8594; JAILBREAK</p>
     </div>
 
     <section id="overview">
@@ -407,7 +433,8 @@ build/Payload/hidgate4.app
   </main>
 
   <footer>
-    MIT licensed &#183; for security research on devices you own &#183; crash PoC, not a jailbreak
+    MIT licensed &#183; for security research on devices you own &#183; crash PoC, not a jailbreak<br>
+    <span style="color:#ffb86b">Crash &#8594; Control &#8594; Jailbreak</span>
   </footer>
 </body>
 </html>
