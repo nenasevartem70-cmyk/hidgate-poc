@@ -30,6 +30,20 @@ far = 0x0020000000000038
 esr = 0x0000000096000004
 ```
 
+## Reproducibility
+
+Three independent runs produced the same fault signature:
+
+| Log timestamp | App | `x16` | `far` |
+|---|---|---|---|
+| 2026-10-30 01:36:52 | hidgate4 | `0x0020000000000000` | `0x0020000000000038` |
+| 2026-10-30 12:40:38 | hidgate5 | `0x0020000000000000` | `0x0020000000000038` |
+| 2026-10-30 13:52:54 | hidgate4 (auto) | `0x0020000000000000` | `0x0020000000000038` |
+
+All three abort at the same instruction and backtrace through
+`IOHIDFamily` and `AppleSPU`. This confirms the UAF is stable; generic heap
+spray did not change the fault value.
+
 `far` is exactly `x16 + 0x38`, and `esr` is a data abort. The faulting
 instruction, after applying the kernel slide, is:
 
