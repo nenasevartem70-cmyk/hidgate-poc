@@ -235,14 +235,37 @@ submission, so the reclaimer requests are still in flight and
 `clientClosedGated` takes the inactive path (no dequeue). That should leave
 the embedded node stale and tell us which interpretation is correct.
 
+### Power-state wedge after immediate close
+
+The immediate-close build eventually produced a different panic:
+
+```
+AppleJPEGDriver::setPowerState(0xffffffdef7cb1880, 1 -> 0)
+  timed out after 10210 ms @IOServicePM.cpp:5577
+```
+
+This is **not** the `far=0x308` queue-walk UAF. It is a power-management
+timeout: the driver was left with in-flight/leaked requests and could not
+transition to the off state. The app had already logged
+`jpegreclaim done (no panic)`; the watchdog fired later, when the driver was
+asked to power down.
+
+The wedge is a new, repeatable kernel-hang signal, but it also masks the UAF:
+the power watchdog fires before the stale queue node is walked. The next build
+closes the userclient **while the sync decode is in flight**, which is the
+real `isInactive` path from the CVE, then reclaims on a fresh connection and
+probes.
+
 ## Next steps
 
-1. Run `jpegstall4` (immediate close after reclaim) and check whether the
-   kernel panics again at `far=0x308`.
-2. If it panics, the stale node survives and we can chain another
-   same-type reclaim into a persistent UAF.
-3. If it survives, the reclaimer completion is cleaning the queue; the next
-   step is a request that deliberately never completes before the walk.
+1. Run `jpegclose`: close the victim userclient during the sync decode,
+   reclaim on a fresh connection, and trigger a sync probe.
+2. If the probe panics at `far=0x308`, the inactive free left the node and we
+   can chain the reclaim into a persistent UAF.
+3. If it survives, the node is being dequeued even on the inactive path; the
+   next step is to keep the reclaimer request from completing at all.
+4. Treat the `setPowerState` timeout as a separate DoS primitive, not as
+   control.
 2. Observe whether the panic disappears, changes registers, or turns into a
    double-free/write fault.
 3. If the sync trigger still returns instantly, switch to an in-app camera
