@@ -39,6 +39,9 @@ Three independent runs produced the same fault signature:
 | 2026-10-30 01:36:52 | hidgate4 | `0x0020000000000000` | `0x0020000000000038` |
 | 2026-10-30 12:40:38 | hidgate5 | `0x0020000000000000` | `0x0020000000000038` |
 | 2026-10-30 13:52:54 | hidgate4 (auto) | `0x0020000000000000` | `0x0020000000000038` |
+| 2026-10-30 14:07:40 | hidgate4 (targeted spray) | `0x0020000000000000` | `0x0020000000000038` |
+| 2026-10-30 14:28:18 | hidgate4 (phase A, `UAF-close`) | `0x0020000000000000` | `0x0020000000000038` |
+| 2026-10-30 14:40:07 | hidgate4 (phase A, `UAF-close-idx-inject`) | `0x0020000000000000` | `0x0020000000000038` |
 
 All three abort at the same instruction and backtrace through
 `IOHIDFamily` and `AppleSPU`. This confirms the UAF is stable; generic heap

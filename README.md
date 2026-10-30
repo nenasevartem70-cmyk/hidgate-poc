@@ -152,6 +152,14 @@ The workflow in `.github/workflows/build.yml` builds an unsigned IPA on a
 macOS runner and uploads it as the `hidgate4-unsigned-ipa` artifact. You can
 run it manually from the Actions tab.
 
+## Research log
+
+The crash-to-control experiments (`hidgate4` through `hidgate10`) are
+documented in [`docs/experiment-log.md`](docs/experiment-log.md). Variant
+sources live in [`experiments/`](experiments/). The short version: the UAF is
+stable, phase A (`close`/`open`) is the trigger, and generic/targeted heap
+spray has not yet reclaimed the object.
+
 ## Project page (GitHub Pages)
 
 The `docs/` directory contains a self-contained dark landing page with the
