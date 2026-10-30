@@ -48,6 +48,10 @@ The direct PC-control path from the public PoC is PAC-protected on A12
 fake vtable. Read the full reasoning in
 [`docs/kernel-control.md`](docs/kernel-control.md).
 
+The jailbreak project built on this research is
+**[Hidra](https://github.com/nenasevartem70-cmyk/hidra)** — target device,
+architecture, milestones, and the current release estimate live there.
+
 ## IOHID path — CVE-2026-28992
 
 ### Status
