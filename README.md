@@ -38,6 +38,12 @@ The original research and PoC were published by **Johnny Franks
 technique, with service enumeration and a panic-log analysis from the
 18.7.2/A12 target.
 
+## Patch timeline
+
+<p align="center">
+  <img src="assets/timeline.svg" alt="CVE-2026-28992 patch timeline" width="100%">
+</p>
+
 ## Root cause
 
 `IOHIDEventServiceFastPathUserClient` gates `sel0` on the
@@ -145,6 +151,22 @@ python3 scripts/package_ipa.py hidgate4.app hidgate4-unsigned.ipa
 The workflow in `.github/workflows/build.yml` builds an unsigned IPA on a
 macOS runner and uploads it as the `hidgate4-unsigned-ipa` artifact. You can
 run it manually from the Actions tab.
+
+## Project page (GitHub Pages)
+
+The `docs/` directory contains a self-contained dark landing page with the
+banner, race diagram, panic card, and timeline.
+
+To enable it:
+
+1. Repository **Settings → Pages**
+2. **Build and deployment → Deploy from a branch**
+3. Branch `main`, folder `/docs`
+4. Save
+
+After that the page is available at:
+
+**https://nenasevartem70-cmyk.github.io/hidgate-poc/**
 
 ## Warning
 

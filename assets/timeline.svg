@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 280" width="1100" height="280" role="img" aria-label="CVE-2026-28992 patch timeline">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#070b10"/>
+      <stop offset="1" stop-color="#101a24"/>
+    </linearGradient>
+    <linearGradient id="line" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#ff5f56"/>
+      <stop offset="0.45" stop-color="#ffb86b"/>
+      <stop offset="1" stop-color="#27c93f"/>
+    </linearGradient>
+    <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse">
+      <path d="M 32 0 L 0 0 0 32" fill="none" stroke="#1a2633" stroke-width="1"/>
+    </pattern>
+  </defs>
+
+  <rect width="1100" height="280" fill="url(#bg)"/>
+  <rect width="1100" height="280" fill="url(#grid)" opacity="0.25"/>
+
+  <text x="40" y="48" fill="#f5f7fa" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="22" font-weight="700">Patch timeline</text>
+  <text x="40" y="72" fill="#6f8498" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13">CVE-2026-28992 &#183; IOHIDFamily FastPathUserClient</text>
+
+  <line x1="80" y1="140" x2="1020" y2="140" stroke="#25384a" stroke-width="6" stroke-linecap="round"/>
+  <line x1="80" y1="140" x2="700" y2="140" stroke="url(#line)" stroke-width="6" stroke-linecap="round" opacity="0.85"/>
+
+  <g font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">
+    <circle cx="150" cy="140" r="10" fill="#ff5f56" stroke="#0b1219" stroke-width="4"/>
+    <text x="110" y="178" fill="#ff5f56" font-size="14" font-weight="700">iOS 15.0&#8211;18.7.1</text>
+    <text x="110" y="200" fill="#8fa6bb" font-size="12">vulnerable</text>
+
+    <circle cx="430" cy="140" r="10" fill="#ffb86b" stroke="#0b1219" stroke-width="4"/>
+    <text x="380" y="178" fill="#ffb86b" font-size="14" font-weight="700">iOS 18.7.2</text>
+    <text x="380" y="200" fill="#8fa6bb" font-size="12">tested / data abort</text>
+
+    <circle cx="720" cy="140" r="10" fill="#27c93f" stroke="#0b1219" stroke-width="4"/>
+    <text x="680" y="178" fill="#27c93f" font-size="14" font-weight="700">iOS 18.7.9</text>
+    <text x="680" y="200" fill="#8fa6bb" font-size="12">patched</text>
+
+    <circle cx="920" cy="140" r="10" fill="#27c93f" stroke="#0b1219" stroke-width="4"/>
+    <text x="880" y="178" fill="#27c93f" font-size="14" font-weight="700">iOS 26.5</text>
+    <text x="880" y="200" fill="#8fa6bb" font-size="12">patched</text>
+  </g>
+
+  <rect x="40" y="234" width="1020" height="1" fill="#25384a"/>
+  <text x="40" y="260" fill="#6f8498" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12">Test target: iPhone XR (A12) &#183; 18.7.2 (22H124) &#183; known crash, no kernel r/w</text>
+</svg>

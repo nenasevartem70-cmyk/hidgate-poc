@@ -1,0 +1,413 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#060a0f">
+  <title>CVE-2026-28992 — IOHIDFamily FastPathUserClient crash PoC</title>
+  <meta name="description" content="App-reachable IOHIDFamily FastPathUserClient race/UAF. iOS 18.7.2 / iPhone XR. Crash PoC, not a jailbreak.">
+  <link rel="icon" href="assets/banner.svg" type="image/svg+xml">
+  <style>
+    :root {
+      --bg: #060a0f;
+      --panel: #0b1219;
+      --panel2: #0f1821;
+      --line: #223447;
+      --line2: #2f4a62;
+      --text: #d7e3ee;
+      --muted: #7f95aa;
+      --red: #ff5f56;
+      --orange: #ffb86b;
+      --green: #27c93f;
+      --blue: #58a6ff;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+
+    body {
+      margin: 0;
+      color: var(--text);
+      background:
+        radial-gradient(900px 500px at 85% 5%, rgba(255, 77, 77, .10), transparent 60%),
+        radial-gradient(800px 500px at 10% 40%, rgba(88, 166, 255, .07), transparent 60%),
+        var(--bg);
+      font-family: var(--mono);
+      line-height: 1.65;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background-image:
+        linear-gradient(rgba(34, 52, 71, .35) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(34, 52, 71, .35) 1px, transparent 1px);
+      background-size: 40px 40px;
+      opacity: .22;
+      z-index: -1;
+    }
+
+    .scan {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background: repeating-linear-gradient(to bottom, transparent 0 7px, rgba(255,255,255,.025) 8px);
+      opacity: .35;
+      animation: scan 9s linear infinite;
+      z-index: 5;
+    }
+
+    @keyframes scan {
+      from { transform: translateY(0); }
+      to { transform: translateY(40px); }
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: .65; }
+      50% { opacity: 1; }
+    }
+
+    a { color: var(--blue); text-decoration: none; }
+    a:hover { color: #9ccfff; }
+
+    .nav {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      backdrop-filter: blur(14px);
+      background: rgba(6, 10, 15, .78);
+      border-bottom: 1px solid var(--line);
+    }
+
+    .nav-inner {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 12px 20px;
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      font-size: 13px;
+    }
+
+    .brand {
+      color: var(--text);
+      font-weight: 700;
+      letter-spacing: .5px;
+      white-space: nowrap;
+    }
+
+    .brand span { color: var(--red); }
+
+    .nav a { color: var(--muted); }
+    .nav a:hover { color: var(--text); }
+    .nav-right { margin-left: auto; display: flex; gap: 14px; }
+
+    main { max-width: 1120px; margin: 0 auto; padding: 28px 20px 80px; }
+
+    .hero {
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      overflow: hidden;
+      box-shadow: 0 24px 80px rgba(0,0,0,.45), 0 0 0 1px rgba(255,255,255,.02) inset;
+      animation: pulse 6s ease-in-out infinite;
+    }
+
+    .hero img { display: block; width: 100%; height: auto; }
+
+    .badges {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      margin: 18px 0 30px;
+    }
+
+    .badges img { height: 28px; }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 14px;
+      margin: 20px 0 34px;
+    }
+
+    .card {
+      background: linear-gradient(180deg, rgba(15,24,33,.92), rgba(11,18,25,.92));
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 18px;
+      transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease;
+    }
+
+    .card:hover {
+      transform: translateY(-2px);
+      border-color: var(--line2);
+      box-shadow: 0 10px 30px rgba(0,0,0,.25);
+    }
+
+    .kicker {
+      color: var(--orange);
+      font-size: 11px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+
+    .card h3 {
+      margin: 0 0 6px;
+      font-size: 18px;
+      color: var(--text);
+    }
+
+    .card p { margin: 0; color: var(--muted); font-size: 13px; }
+
+    .card.red { border-color: rgba(255,95,86,.45); }
+    .card.green { border-color: rgba(39,201,63,.35); }
+
+    h2 {
+      font-size: 24px;
+      margin: 42px 0 10px;
+      letter-spacing: .3px;
+    }
+
+    h2::before {
+      content: "// ";
+      color: var(--red);
+    }
+
+    .lead { color: var(--muted); max-width: 900px; margin: 0 0 18px; }
+
+    .figure {
+      margin: 20px 0 8px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      overflow: hidden;
+      background: var(--panel);
+    }
+
+    .figure img { display: block; width: 100%; height: auto; }
+
+    .caption {
+      color: var(--muted);
+      font-size: 12px;
+      padding: 10px 14px;
+      border-top: 1px solid var(--line);
+    }
+
+    .code {
+      background: #04070b;
+      border: 1px solid var(--line);
+      border-left: 4px solid var(--red);
+      border-radius: 10px;
+      padding: 16px 18px;
+      overflow-x: auto;
+      color: #c7d5e3;
+      font-size: 13px;
+      line-height: 1.7;
+      white-space: pre;
+    }
+
+    .code .r { color: var(--red); }
+    .code .o { color: var(--orange); }
+    .code .g { color: var(--green); }
+    .code .b { color: var(--blue); }
+    .code .m { color: var(--muted); }
+
+    .warn {
+      border: 1px solid rgba(255,95,86,.55);
+      background: rgba(255,95,86,.06);
+      border-radius: 14px;
+      padding: 18px 20px;
+      margin: 18px 0;
+    }
+
+    .warn strong { color: var(--red); }
+
+    .links {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 16px;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      border: 1px solid var(--line2);
+      background: var(--panel2);
+      color: var(--text);
+      padding: 10px 16px;
+      border-radius: 10px;
+      font-size: 13px;
+      transition: border-color .18s ease, transform .18s ease;
+    }
+
+    .btn:hover { border-color: var(--orange); transform: translateY(-1px); color: var(--text); }
+    .btn.primary { border-color: rgba(255,95,86,.55); background: rgba(255,95,86,.08); }
+
+    footer {
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 12px;
+      text-align: center;
+      padding: 26px 20px 40px;
+    }
+
+    @media (max-width: 820px) {
+      .nav-inner { flex-wrap: wrap; gap: 10px; }
+      .nav-right { margin-left: 0; }
+      .grid { grid-template-columns: 1fr; }
+      h2 { font-size: 21px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="scan"></div>
+
+  <nav class="nav">
+    <div class="nav-inner">
+      <a class="brand" href="#top"><span>hidgate</span>-poc</a>
+      <a href="#overview">Overview</a>
+      <a href="#race">Race</a>
+      <a href="#panic">Panic</a>
+      <a href="#timeline">Timeline</a>
+      <a href="#build">Build</a>
+      <div class="nav-right">
+        <a href="https://github.com/nenasevartem70-cmyk/hidgate-poc">GitHub</a>
+      </div>
+    </div>
+  </nav>
+
+  <main id="top">
+    <div class="hero">
+      <img src="assets/hero.svg" alt="CVE-2026-28992 kernel data abort hero">
+    </div>
+
+    <div class="badges">
+      <img alt="CVE" src="https://img.shields.io/badge/CVE-2026--28992-critical?style=for-the-badge&labelColor=1a0d10&color=ff4d4d">
+      <img alt="Platform" src="https://img.shields.io/badge/iOS-18.7.2%20%2F%20A12-0b1219?style=for-the-badge&labelColor=101a24&color=58a6ff">
+      <img alt="Status" src="https://img.shields.io/badge/status-crash%20PoC-ff9f43?style=for-the-badge&labelColor=1a140b">
+      <img alt="License" src="https://img.shields.io/badge/license-MIT-27c93f?style=for-the-badge&labelColor=0b1219">
+      <a href="https://github.com/nenasevartem70-cmyk/hidgate-poc/actions/workflows/build.yml"><img alt="Build" src="https://github.com/nenasevartem70-cmyk/hidgate-poc/actions/workflows/build.yml/badge.svg"></a>
+    </div>
+
+    <section id="overview">
+      <h2>Overview</h2>
+      <p class="lead">
+        <strong>hidgate-poc</strong> is a standalone iOS crash PoC for
+        <strong>CVE-2026-28992</strong> in <code>IOHIDEventServiceFastPathUserClient</code>.
+        It is reachable from the normal app sandbox without entitlements and was
+        tested on an iPhone XR (A12) running iOS 18.7.2.
+      </p>
+
+      <div class="grid">
+        <div class="card red">
+          <div class="kicker">Vulnerability</div>
+          <h3>Race / UAF</h3>
+          <p>FastPath open and teardown operate in different locking domains on the same provider state.</p>
+        </div>
+        <div class="card">
+          <div class="kicker">Target</div>
+          <h3>iOS 18.7.2 / A12</h3>
+          <p>iPhone XR (iPhone11,8), xnu-11417.140.69.702.20~1.</p>
+        </div>
+        <div class="card green">
+          <div class="kicker">Patched</div>
+          <h3>18.7.9 / 26.5</h3>
+          <p>Apple fixed the issue with improved locking. The PoC targets the vulnerable builds.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="race">
+      <h2>The race</h2>
+      <p class="lead">
+        <code>sel0</code> gates on entitlement keys in the caller-supplied
+        dictionary. <code>sel1</code> drops provider state without the lock,
+        while <code>sel2</code>/open paths walk the same provider-facing objects.
+      </p>
+      <div class="figure">
+        <img src="assets/race.svg" alt="FastPath open teardown race diagram">
+        <div class="caption">Two locking domains, one provider: teardown frees state while the open path walks it.</div>
+      </div>
+    </section>
+
+    <section id="panic">
+      <h2>The panic</h2>
+      <p class="lead">
+        The crash is a kernel data abort on a virtual call through a corrupted
+        object pointer. The backtrace contains IOHIDFamily and AppleSPU.
+      </p>
+      <div class="figure">
+        <img src="assets/panic.svg" alt="Kernel data abort panic excerpt">
+        <div class="caption">Faulting instruction: <code>ldr x8, [x16, #0x38]!</code> &#183; x16 = 0x0020000000000000.</div>
+      </div>
+
+      <div class="code"><span class="r">Kernel data abort</span>
+pc  = <span class="o">0xfffffff02405c388</span>
+x16 = <span class="o">0x0020000000000000</span>
+far = <span class="o">0x0020000000000038</span>
+esr = <span class="m">0x0000000096000004</span>
+
+<span class="b">0xfffffff008424388</span>:  <span class="r">ldr x8, [x16, #0x38]!</span></div>
+
+      <div class="warn">
+        <strong>This is a crash PoC, not a jailbreak.</strong>
+        It does not provide kernel read/write, PAC/PPL/SPTM bypass, or persistence.
+        It intentionally panics the kernel and reboots the device.
+      </div>
+    </section>
+
+    <section id="timeline">
+      <h2>Patch timeline</h2>
+      <div class="figure">
+        <img src="assets/timeline.svg" alt="CVE-2026-28992 patch timeline">
+        <div class="caption">Vulnerable through 18.7.1 &#183; tested on 18.7.2 &#183; patched in 18.7.9 and 26.5.</div>
+      </div>
+    </section>
+
+    <section id="build">
+      <h2>Build it yourself</h2>
+      <p class="lead">No prebuilt IPA is committed. Build the app and package an unsigned IPA on macOS:</p>
+      <div class="code"><span class="m"># clone</span>
+git clone https://github.com/nenasevartem70-cmyk/hidgate-poc.git
+<span class="m"># build the app + IPA</span>
+cd hidgate-poc
+<span class="g">make</span>
+
+<span class="m"># outputs</span>
+build/Payload/hidgate4.app
+<span class="o">build/hidgate4-unsigned.ipa</span></div>
+      <p class="lead">Sign the IPA with your own certificate or sideloading workflow before installing.</p>
+      <div class="links">
+        <a class="btn primary" href="https://github.com/nenasevartem70-cmyk/hidgate-poc">Repository</a>
+        <a class="btn" href="https://github.com/nenasevartem70-cmyk/hidgate-poc/actions/workflows/build.yml">Build workflow</a>
+        <a class="btn" href="https://github.com/nenasevartem70-cmyk/hidgate-poc/blob/main/docs/panic-analysis.md">Panic analysis</a>
+      </div>
+    </section>
+
+    <section id="credits">
+      <h2>Credits</h2>
+      <p class="lead">
+        Original discovery and PoC: <strong>Johnny Franks (@0xjohnny)</strong>.
+        This repository adds a standalone build, service enumeration, a redacted
+        panic analysis, and a reproducible IPA build workflow.
+      </p>
+      <div class="links">
+        <a class="btn" href="https://github.com/0xjohnnydev/CVE-2026-28992-IOHIDFamily-FastPathUserClient-Race-Conditions">Original PoC</a>
+        <a class="btn" href="https://github.com/clogan9019-dotcom/IOHIDFamily-PoC-Research">Alternative PoC</a>
+        <a class="btn" href="https://support.apple.com/en-us/127111">Apple advisory</a>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    MIT licensed &#183; for security research on devices you own &#183; crash PoC, not a jailbreak
+  </footer>
+</body>
+</html>
